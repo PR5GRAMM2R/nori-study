@@ -19,6 +19,7 @@
 #pragma once
 
 #include <nori/mesh.h>
+#include <nori/bbox.h>
 
 NORI_NAMESPACE_BEGIN
 
@@ -69,5 +70,20 @@ private:
     Mesh         *m_mesh = nullptr; ///< Mesh (only a single one for now)
     BoundingBox3f m_bbox;           ///< Bounding box of the entire scene
 };
+
+class Node{
+    public:
+    Node();
+    ~Node();
+
+    BoundingBox3f box;
+    std::vector<uint32_t> triangleIdxs;
+    Node* child[8]; //
+    bool hasChild;
+    int depth;
+};
+
+Node* buildOctree(Mesh *mesh);
+void printOctree(Node* node);
 
 NORI_NAMESPACE_END

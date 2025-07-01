@@ -32,12 +32,135 @@ void Accel::build() {
     /* Nothing to do here for now */
 }
 
+BoundingBox3f getFullMeshBoundingBox(Mesh *m_mesh)
+{
+    BoundingBox3f meshBoundingBox;
+
+    for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx){
+        BoundingBox3f temp = m_mesh->getBoundingBox(idx);
+        meshBoundingBox.expandBy(temp);
+    }
+
+    return meshBoundingBox;
+}
+
+#define OCTREE_CHILDS 8
+#define OCTREE_CAPACITY 10
+#define OCTREE_MAX_DEPTH 10
+
+Node::Node(){
+
+}
+
+Node::~Node(){
+    for(int i = 0; i < OCTREE_CHILDS; i++){
+        delete child[i];
+    }
+
+    delete this;
+}
+
+bool addNode(Mesh *m_mesh, Node* node, uint32_t index){
+    // if(node->depth > OCTREE_MAX_DEPTH)
+    //     return false;
+
+    if(node->triangleIdxs.size() < OCTREE_CAPACITY && !node->hasChild){
+        node->triangleIdxs.push_back(index);
+
+        return true;
+    }
+    else if(node->hasChild){
+        Point3f idxCenter = m_mesh->getCentroid(index);
+
+        for(int i = 0; i < OCTREE_CHILDS; i++){
+            if(node->child[i]->box.contains(idxCenter)){
+                addNode(m_mesh, node->child[i], index);
+
+                break;
+            }
+        }
+
+        return true;
+    }
+    else{
+        node->hasChild = true;
+
+        Node* newNodes = new Node[OCTREE_CHILDS];
+        Point3f boxCenter = node->box.getCenter();
+        std::vector<Point3f> boxCorners = node->box.get3DimCorners();
+
+        for(int i = 0; i < OCTREE_CHILDS; i++){
+            newNodes[i].depth = node->depth + 1;
+            newNodes[i].hasChild = false;
+            newNodes[i].box = BoundingBox3f(boxCorners[i], boxCenter);
+            node->child[i] = &newNodes[i];
+        }
+
+        node->triangleIdxs.push_back(index);
+        for(uint32_t idx : node->triangleIdxs){
+            Point3f idxCenter = m_mesh->getCentroid(idx);
+
+            for(int i = 0; i < OCTREE_CHILDS; i++){
+                if(node->child[i]->box.contains(idxCenter)){
+                    addNode(m_mesh, node->child[i], index);
+
+                    break;
+                }
+            }
+        }
+
+        node->triangleIdxs.clear();
+
+        return true;
+    }
+}
+
+Node* buildOctree(Mesh* m_mesh)
+{
+    BoundingBox3f meshBoundingBox = getFullMeshBoundingBox(m_mesh);
+
+    Node* octree = new Node;
+    octree->box = meshBoundingBox;
+    octree->hasChild = false;
+    octree->depth = 0;
+    
+    for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx){
+        addNode(m_mesh, octree, idx);
+    }
+
+    return octree;
+}
+
+void printOctree(Node* node)
+{
+    printf("%d Depth -> %lu Counts\n", node->depth, node->triangleIdxs.size());
+    printf("===========\n");
+    for(int i = 0; i < OCTREE_CHILDS; i++){
+        printOctree(node->child[i]);
+    }
+
+    return;
+}
+
+//int temp = 0;
+bool aaa = false;
+
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const {
+    {
+        if(!aaa){
+            Node* octree = buildOctree(m_mesh);
+            printOctree(octree);
+            aaa = true;
+        }
+    }
+    
     bool foundIntersection = false;  // Was an intersection found so far?
     uint32_t f = (uint32_t) -1;      // Triangle index of the closest intersection
 
     Ray3f ray(ray_); /// Make a copy of the ray (we will need to update its '.maxt' value)
 
+    //printf("RayIntersect %d, ", ++temp);
+    
     /* Brute force search through all triangles */
     for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx) {
         float u, v, t;

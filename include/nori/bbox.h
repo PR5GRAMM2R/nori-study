@@ -391,6 +391,32 @@ template <typename _PointType> struct TBoundingBox {
         return true;
     }
 
+    /*
+    First Layer =>  2 6
+                    0 4
+    
+    Second Layer => 3 7
+                    1 5
+    */
+
+    std::vector<Point3f> get3DimCorners() const
+    {
+        assert(Dimension == 3);
+
+        std::vector<Point3f> results;
+        
+        for(int i = 0; i < 8; i++){
+            float x = i / 4 == 0 ? min[0] : max[0];
+            float y = (i % 4) / 2 == 0 ? min[1] : max[1];
+            float z = (i / 4) / 2 == 0 ? min[2] : max[2];
+            Point3f temp(x, y, z);
+
+            results.push_back(temp);
+        }
+
+        return results;
+    }
+
     PointType min; ///< Component-wise minimum 
     PointType max; ///< Component-wise maximum 
 };
