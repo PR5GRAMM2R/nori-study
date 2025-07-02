@@ -78,9 +78,11 @@ class Node{
 
     BoundingBox3f box;
     std::vector<uint32_t> triangleIdxs;
-    Node* child[8]; //
+    Node* child[8];
     bool hasChild;
     int depth;
+    int localSize = 0;
+    int totalSize = 0;
 };
 
 Node* buildOctree(Mesh *mesh);

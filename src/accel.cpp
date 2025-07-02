@@ -21,12 +21,12 @@
 
 NORI_NAMESPACE_BEGIN
 
-void Accel::addMesh(Mesh *mesh) {
-    if (m_mesh)
-        throw NoriException("Accel: only a single mesh is supported!");
-    m_mesh = mesh;
-    m_bbox = m_mesh->getBoundingBox();
-}
+//void Accel::addMesh(Mesh *mesh) {
+//    if (m_mesh)
+//        throw NoriException("Accel: only a single mesh is supported!");
+//    m_mesh = mesh;
+//    m_bbox = m_mesh->getBoundingBox();
+//}
 
 void Accel::build() {
     /* Nothing to do here for now */
@@ -45,8 +45,8 @@ BoundingBox3f getFullMeshBoundingBox(Mesh *m_mesh)
 }
 
 #define OCTREE_CHILDS 8
-#define OCTREE_CAPACITY 10
-#define OCTREE_MAX_DEPTH 10
+#define OCTREE_NODE_CAPACITY 10
+#define OCTREE_MAX_DEPTH 7
 
 Node::Node(){
 
@@ -61,19 +61,28 @@ Node::~Node(){
 }
 
 bool addNode(Mesh *m_mesh, Node* node, uint32_t index){
-    // if(node->depth > OCTREE_MAX_DEPTH)
-    //     return false;
+    if(node->depth > OCTREE_MAX_DEPTH)
+         return false;
 
-    if(node->triangleIdxs.size() < OCTREE_CAPACITY && !node->hasChild){
+    node->totalSize++;
+
+    if(node->depth != OCTREE_MAX_DEPTH && node->triangleIdxs.size() < OCTREE_NODE_CAPACITY && !node->hasChild){
         node->triangleIdxs.push_back(index);
+        node->localSize++;
 
+        return true;
+    }
+    else if (node->depth == OCTREE_MAX_DEPTH && !node->hasChild) {
+        node->triangleIdxs.push_back(index);
+        node->localSize++;
+        
         return true;
     }
     else if(node->hasChild){
         Point3f idxCenter = m_mesh->getCentroid(index);
 
         for(int i = 0; i < OCTREE_CHILDS; i++){
-            if(node->child[i]->box.contains(idxCenter)){
+            if(node->child[i]->box.contains(idxCenter, false)){
                 addNode(m_mesh, node->child[i], index);
 
                 break;
@@ -82,27 +91,35 @@ bool addNode(Mesh *m_mesh, Node* node, uint32_t index){
 
         return true;
     }
-    else{
+    else if(node->triangleIdxs.size() >= OCTREE_NODE_CAPACITY && !node->hasChild) {
         node->hasChild = true;
+        node->localSize = 0;
 
         Node* newNodes = new Node[OCTREE_CHILDS];
         Point3f boxCenter = node->box.getCenter();
         std::vector<Point3f> boxCorners = node->box.get3DimCorners();
 
+        /*cout << boxCenter.x() << ", " << boxCenter.y() << ", " << boxCenter.z() << endl << endl;
+        for (int i = 0; i < 8; i++) {
+            cout << boxCorners[i].x() << ", " << boxCorners[i].y() << ", " << boxCorners[i].z() << endl;
+        }
+        cout << endl;*/
+
         for(int i = 0; i < OCTREE_CHILDS; i++){
             newNodes[i].depth = node->depth + 1;
             newNodes[i].hasChild = false;
-            newNodes[i].box = BoundingBox3f(boxCorners[i], boxCenter);
+            newNodes[i].box = BoundingBox3f(boxCorners[i], boxCenter, true);
             node->child[i] = &newNodes[i];
         }
 
         node->triangleIdxs.push_back(index);
-        for(uint32_t idx : node->triangleIdxs){
+        for (int i = 0; i < node->triangleIdxs.size(); i++) {
+            uint32_t idx = node->triangleIdxs[i];
             Point3f idxCenter = m_mesh->getCentroid(idx);
 
-            for(int i = 0; i < OCTREE_CHILDS; i++){
-                if(node->child[i]->box.contains(idxCenter)){
-                    addNode(m_mesh, node->child[i], index);
+            for(int j = 0; j < OCTREE_CHILDS; j++){
+                if(node->child[j]->box.contains(idxCenter, false)){
+                    addNode(m_mesh, node->child[j], index);
 
                     break;
                 }
@@ -133,10 +150,17 @@ Node* buildOctree(Mesh* m_mesh)
 
 void printOctree(Node* node)
 {
-    printf("%d Depth -> %lu Counts\n", node->depth, node->triangleIdxs.size());
-    printf("===========\n");
-    for(int i = 0; i < OCTREE_CHILDS; i++){
-        printOctree(node->child[i]);
+    printf("%d Depth -> %lu Counts\n", node->depth, node->totalSize);
+
+    for (int i = 0; i < node->depth; i++) {
+        cout << "=====||";
+    }
+    cout << endl;
+
+    if (node->hasChild) {
+        for (int i = 0; i < OCTREE_CHILDS; i++) {
+            printOctree(node->child[i]);
+        }
     }
 
     return;
@@ -145,14 +169,29 @@ void printOctree(Node* node)
 //int temp = 0;
 bool aaa = false;
 
-bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const {
+void Accel::addMesh(Mesh* mesh) {
+    if (m_mesh)
+        throw NoriException("Accel: only a single mesh is supported!");
+    m_mesh = mesh;
+    m_bbox = m_mesh->getBoundingBox();
+
     {
+        if (!aaa) {
+            Node* octree = buildOctree(m_mesh);
+            //printOctree(octree);
+            aaa = true;
+        }
+    }
+}
+
+bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const {
+    /*{
         if(!aaa){
             Node* octree = buildOctree(m_mesh);
             printOctree(octree);
             aaa = true;
         }
-    }
+    }*/
     
     bool foundIntersection = false;  // Was an intersection found so far?
     uint32_t f = (uint32_t) -1;      // Triangle index of the closest intersection

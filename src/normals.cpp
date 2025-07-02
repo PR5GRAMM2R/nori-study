@@ -2,8 +2,6 @@
 #include <nori/integrator.h>
 #include <nori/scene.h>
 
-#include <nori/accel.h>
-
 NORI_NAMESPACE_BEGIN
 
 class NormalIntegrator : public Integrator {
