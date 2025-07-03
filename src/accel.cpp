@@ -45,8 +45,8 @@ BoundingBox3f getFullMeshBoundingBox(Mesh *m_mesh)
 }
 
 #define OCTREE_CHILDS 8
-#define OCTREE_NODE_CAPACITY 10
-#define OCTREE_MAX_DEPTH 7
+#define OCTREE_NODE_MAX_CAPACITY 10
+#define OCTREE_MAX_DEPTH 6
 
 Node::Node(){
 
@@ -60,66 +60,57 @@ Node::~Node(){
     delete this;
 }
 
-bool addNode(Mesh *m_mesh, Node* node, uint32_t index){
-    if(node->depth > OCTREE_MAX_DEPTH)
-         return false;
+
+bool nodeInsert(Mesh *m_mesh, Node* node, uint32_t index){
+    assert(node != nullptr);
+    assert(node->depth <= OCTREE_MAX_DEPTH);
+    BoundingBox3f idxBox = m_mesh->getBoundingBox(index);
+    //assert(node->box.contains(idxBox, false) == true);
 
     node->totalSize++;
 
-    if(node->depth != OCTREE_MAX_DEPTH && node->triangleIdxs.size() < OCTREE_NODE_CAPACITY && !node->hasChild){
-        node->triangleIdxs.push_back(index);
-        node->localSize++;
-
-        return true;
-    }
-    else if (node->depth == OCTREE_MAX_DEPTH && !node->hasChild) {
-        node->triangleIdxs.push_back(index);
-        node->localSize++;
-        
-        return true;
-    }
-    else if(node->hasChild){
+    if (node->hasChild) {
         Point3f idxCenter = m_mesh->getCentroid(index);
 
-        for(int i = 0; i < OCTREE_CHILDS; i++){
-            if(node->child[i]->box.contains(idxCenter, false)){
-                addNode(m_mesh, node->child[i], index);
-
-                break;
+        for (int i = 0; i < OCTREE_CHILDS; i++) {
+            if (node->child[i]->boxForCenters.contains(idxCenter, false)) {
+                return nodeInsert(m_mesh, node->child[i], index);
             }
         }
 
-        return true;
+        cout << "ERROR" << endl;
+        return false;
     }
-    else if(node->triangleIdxs.size() >= OCTREE_NODE_CAPACITY && !node->hasChild) {
+    else if (node->triangleIdxs.size() >= OCTREE_NODE_MAX_CAPACITY && node->depth < OCTREE_MAX_DEPTH) {
         node->hasChild = true;
         node->localSize = 0;
 
         Node* newNodes = new Node[OCTREE_CHILDS];
-        Point3f boxCenter = node->box.getCenter();
-        std::vector<Point3f> boxCorners = node->box.get3DimCorners();
+        Point3f boxCenter = node->boxForCenters.getCenter();
+        std::vector<Point3f> boxCorners = node->boxForCenters.get3DimCorners();
 
-        /*cout << boxCenter.x() << ", " << boxCenter.y() << ", " << boxCenter.z() << endl << endl;
-        for (int i = 0; i < 8; i++) {
-            cout << boxCorners[i].x() << ", " << boxCorners[i].y() << ", " << boxCorners[i].z() << endl;
-        }
-        cout << endl;*/
+        //cout << boxCenter.x() << ", " << boxCenter.y() << ", " << boxCenter.z() << endl << endl;
+        //for (int i = 0; i < 8; i++) {
+        //    cout << boxCorners[i].x() << ", " << boxCorners[i].y() << ", " << boxCorners[i].z() << endl;
+        //}
+        //cout << endl;
 
-        for(int i = 0; i < OCTREE_CHILDS; i++){
-            newNodes[i].depth = node->depth + 1;
-            newNodes[i].hasChild = false;
-            newNodes[i].box = BoundingBox3f(boxCorners[i], boxCenter, true);
+        for (int i = 0; i < OCTREE_CHILDS; i++) {
             node->child[i] = &newNodes[i];
+            node->child[i]->depth = node->depth + 1;
+            node->child[i]->boxForCenters = BoundingBox3f(boxCorners[i], boxCenter, true);
+            node->child[i]->parent = node;
         }
 
         node->triangleIdxs.push_back(index);
+
         for (int i = 0; i < node->triangleIdxs.size(); i++) {
             uint32_t idx = node->triangleIdxs[i];
             Point3f idxCenter = m_mesh->getCentroid(idx);
 
-            for(int j = 0; j < OCTREE_CHILDS; j++){
-                if(node->child[j]->box.contains(idxCenter, false)){
-                    addNode(m_mesh, node->child[j], index);
+            for (int j = 0; j < OCTREE_CHILDS; j++) {
+                if (node->child[j]->boxForCenters.contains(idxCenter, false)) {
+                    nodeInsert(m_mesh, node->child[j], idx);
 
                     break;
                 }
@@ -130,6 +121,36 @@ bool addNode(Mesh *m_mesh, Node* node, uint32_t index){
 
         return true;
     }
+    else{
+        node->triangleIdxs.push_back(index);
+        node->localSize++;
+
+        return true;
+    }
+
+    cout << "ERROR" << endl;
+    return false;
+}
+
+void makeActualOctreeBox(Mesh* m_mesh, Node* node)
+{
+    if (node->hasChild) {
+        for (int i = 0; i < OCTREE_CHILDS; i++) {
+            makeActualOctreeBox(m_mesh, node->child[i]);
+        }
+    }
+
+    for (uint32_t idx = 0; idx < node->triangleIdxs.size(); ++idx) {
+        BoundingBox3f temp = m_mesh->getBoundingBox(idx);
+        node->box.expandBy(temp);
+    }
+
+    for (uint32_t idx = 0; idx < node->triangleIdxs.size(); ++idx) {
+        BoundingBox3f temp = m_mesh->getBoundingBox(idx);
+        assert(node->box.contains(temp, false) == true);
+    }
+
+    return;
 }
 
 Node* buildOctree(Mesh* m_mesh)
@@ -137,15 +158,48 @@ Node* buildOctree(Mesh* m_mesh)
     BoundingBox3f meshBoundingBox = getFullMeshBoundingBox(m_mesh);
 
     Node* octree = new Node;
-    octree->box = meshBoundingBox;
+    octree->boxForCenters = meshBoundingBox;
     octree->hasChild = false;
     octree->depth = 0;
     
     for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx){
-        addNode(m_mesh, octree, idx);
+        nodeInsert(m_mesh, octree, idx);
     }
 
     return octree;
+}
+
+uint32_t nodeCount = 0;
+uint32_t trianglesCount = 0;
+
+uint32_t scanNodesOctree(Node* node)
+{
+    //static uint32_t nodeCount = 0;
+
+    nodeCount++;
+
+    if (node->hasChild) {
+        for (int i = 0; i < OCTREE_CHILDS; i++) {
+            scanNodesOctree(node->child[i]);
+        }
+    }
+
+    return nodeCount;
+}
+
+uint32_t scanTrianglesOctree(Node* node)
+{
+    //static uint32_t trianglesCount = 0;
+
+    trianglesCount += node->localSize;
+
+    if (node->hasChild) {
+        for (int i = 0; i < OCTREE_CHILDS; i++) {
+            scanTrianglesOctree(node->child[i]);
+        }
+    }
+
+    return trianglesCount;
 }
 
 void printOctree(Node* node)
@@ -179,6 +233,10 @@ void Accel::addMesh(Mesh* mesh) {
         if (!aaa) {
             Node* octree = buildOctree(m_mesh);
             //printOctree(octree);
+            scanNodesOctree(octree);
+            scanTrianglesOctree(octree);
+            cout << "Octree's node Count : " << nodeCount << endl;// scanNodesOctree(octree) << endl;
+            cout << "Octree's triangle Count : " << trianglesCount << endl;// scanTrianglesOctree(octree) << endl;
             aaa = true;
         }
     }

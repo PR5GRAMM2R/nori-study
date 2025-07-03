@@ -76,10 +76,12 @@ class Node{
     Node();
     ~Node();
 
-    BoundingBox3f box;
+    BoundingBox3f box = BoundingBox3f();
+    BoundingBox3f boxForCenters = BoundingBox3f();
     std::vector<uint32_t> triangleIdxs;
-    Node* child[8];
-    bool hasChild;
+    Node* parent = nullptr;
+    Node* child[8] = { nullptr, };
+    bool hasChild = false;
     int depth;
     int localSize = 0;
     int totalSize = 0;
