@@ -23,6 +23,29 @@
 
 NORI_NAMESPACE_BEGIN
 
+class Node {
+public:
+    Node();
+    ~Node();
+
+    BoundingBox3f box = BoundingBox3f();
+    BoundingBox3f boxForCenters = BoundingBox3f();
+    std::vector<uint32_t> triangleIdxs;
+    Node* parent = nullptr;
+    Node* child[8] = { nullptr, };
+    bool hasChild = false;
+    int depth;
+    int localSize = 0;
+    int totalSize = 0;
+};
+
+Node* buildOctree(Mesh* mesh);
+bool nodeInsert(Mesh* m_mesh, Node* node, uint32_t index);
+void makeActualOctreeBox(Mesh* m_mesh, Node* node);
+uint32_t scanNodesOctree(Node* node);
+uint32_t scanTrianglesOctree(Node* node);
+void printOctree(Node* node);
+
 /**
  * \brief Acceleration data structure for ray intersection queries
  *
@@ -69,25 +92,7 @@ public:
 private:
     Mesh         *m_mesh = nullptr; ///< Mesh (only a single one for now)
     BoundingBox3f m_bbox;           ///< Bounding box of the entire scene
+    Node* octree;
 };
-
-class Node{
-    public:
-    Node();
-    ~Node();
-
-    BoundingBox3f box = BoundingBox3f();
-    BoundingBox3f boxForCenters = BoundingBox3f();
-    std::vector<uint32_t> triangleIdxs;
-    Node* parent = nullptr;
-    Node* child[8] = { nullptr, };
-    bool hasChild = false;
-    int depth;
-    int localSize = 0;
-    int totalSize = 0;
-};
-
-Node* buildOctree(Mesh *mesh);
-void printOctree(Node* node);
 
 NORI_NAMESPACE_END
