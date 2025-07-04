@@ -53,11 +53,9 @@ Node::Node(){
 }
 
 Node::~Node(){
-    for(int i = 0; i < OCTREE_CHILDS; i++){
-        delete child[i];
-    }
-
-    delete this;
+    //for(int i = 0; i < OCTREE_CHILDS; i++){
+        delete[] child;
+    //}
 }
 
 
@@ -134,15 +132,30 @@ bool nodeInsert(Mesh *m_mesh, Node* node, uint32_t index){
 
 void makeActualOctreeBox(Mesh* m_mesh, Node* node)
 {
+    node->box.reset();
+
     if (node->hasChild) {
         for (int i = 0; i < OCTREE_CHILDS; i++) {
             makeActualOctreeBox(m_mesh, node->child[i]);
+            node->box.expandBy(node->child[i]->box);
         }
     }
+    else {
+        if (node->triangleIdxs.empty()) {
+            node->box.expandBy(node->boxForCenters);
+        }
+        else {
+            for (uint32_t idx = 0; idx < node->triangleIdxs.size(); ++idx) {
+                BoundingBox3f temp = m_mesh->getBoundingBox(idx);
+                node->box.expandBy(temp);
+            }
+        }
 
-    for (uint32_t idx = 0; idx < node->triangleIdxs.size(); ++idx) {
-        BoundingBox3f temp = m_mesh->getBoundingBox(idx);
-        node->box.expandBy(temp);
+        /*Node* nodeTemp = node;
+        for (int depth = node->depth; depth > 0; depth--) {
+            nodeTemp = nodeTemp->parent;
+            nodeTemp->box.expandBy(node->box);
+        }*/
     }
 
     for (uint32_t idx = 0; idx < node->triangleIdxs.size(); ++idx) {
@@ -228,6 +241,14 @@ void Accel::addMesh(Mesh* mesh) {
 
     {
         octree = buildOctree(m_mesh);
+        makeActualOctreeBox(m_mesh, octree);
+
+        std::cout << "root box min: " << octree->box.min.transpose()
+            << "  max: " << octree->box.max.transpose() << std::endl;
+
+        std::cout << "root centerBox min: " << octree->boxForCenters.min.transpose()
+            << "  max: " << octree->boxForCenters.max.transpose() << std::endl;
+
         //printOctree(octree);
         scanNodesOctree(octree);
         cout << "Octree's node Count : " << nodeCount << endl;// scanNodesOctree(octree) << endl;
@@ -236,56 +257,53 @@ void Accel::addMesh(Mesh* mesh) {
     }
 }
 
-std::vector<std::pair<float, float>> sortFoundTriangles(const std::vector<std::pair<float, float>>& triangles)
+void sortFoundTriangles(std::vector<std::pair<float, IdxData>>& triangles)
 {
-    std::vector<std::pair<float, float>> sortedFoundTriangles(triangles);
+    std::sort(triangles.begin(), triangles.end(),
+        [](const auto& a, const auto& b) {
+            return a.second.t < b.second.t;  // second(nearT) 기준 오름차순
+        });
 
-    for (int i = 0; i < triangles.size(); i++) {
-        float nearDist = std::numeric_limits<float>::infinity();
-
-        for (int j = i; j < triangles.size(); j++) {
-            if (triangles[j].second < triangles[i].second) {
-                sortedFoundTriangles[j] = triangles[i];
-                sortedFoundTriangles[i] = triangles[j];
-            }
-        }
-    }
-
-    return sortedFoundTriangles;
+    return;
 }
 
-std::vector<std::pair<float, float>> findIntersectedTriangles(Mesh* mesh, Node* node, const Ray3f& ray_)
+std::vector<std::pair<float, IdxData>> findIntersectedTriangles(Mesh* mesh, Node* node, const Ray3f& ray_)
 {
-    std::vector<std::pair<float, float>> foundTrianglesTemp;
+    std::vector<std::pair<float, IdxData>> foundTrianglesTemp;
     float nearT, farT;
 
     if (node->box.rayIntersect(ray_, nearT, farT)) {
         if (node->hasChild) {
+            std::vector<std::pair<float, IdxData>> temp;
+
             for (int i = 0; i < OCTREE_CHILDS; i++) {
-                std::vector<std::pair<float, float>> temp = findIntersectedTriangles(mesh, node->child[i], ray_);
+                temp = findIntersectedTriangles(mesh, node->child[i], ray_);
                 if (!temp.empty()) {
                     foundTrianglesTemp.insert(foundTrianglesTemp.end(), temp.begin(), temp.end());
                 }
             }
 
-            std::vector<std::pair<float, float>> sortedfoundTriangles = sortFoundTriangles(foundTrianglesTemp);
-
-            return sortedfoundTriangles;
+            return foundTrianglesTemp;
         }
         else {
-            std::vector<std::pair<float, float>> foundTriangles;
+            std::vector<std::pair<float, IdxData>> foundTriangles;
 
             for (uint32_t idx : node->triangleIdxs) {
                 float u, v, t;
                 if (mesh->rayIntersect(idx, ray_, u, v, t)) {
-                    std::pair<float, float> tmp = std::pair<float, float>(idx, nearT);
-                    foundTriangles.push_back(tmp);
+                    IdxData i;
+                    i.u = u;
+                    i.v = v;
+                    i.t = t;
+                    foundTriangles.push_back(std::pair<float, IdxData>(idx, i));
                 }
             }
 
             return foundTriangles;
         }
     }
+
+    return {};
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const {    
@@ -312,31 +330,55 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     //    }
     //}
 
-    bool trianglesFound = false;
+    {
+        std::vector<std::pair<float, IdxData>> foundTriangles = findIntersectedTriangles(m_mesh, octree, ray);
 
-    std::vector<std::pair<float, float>> foundTriangles = findIntersectedTriangles(m_mesh, octree, ray_);
+        sortFoundTriangles(foundTriangles);
 
-    if (!foundTriangles.empty()) {
-        trianglesFound = true;
+        //cout << foundTriangles.size() << endl;
+        int i = 0;
+
+        for (int i = 0; i < foundTriangles.size(); ++i) {
+            uint32_t idx = foundTriangles[i].first;
+
+            if (shadowRay)
+                return true;
+
+            ray.maxt = its.t = foundTriangles[i].second.t;
+            its.uv = Point2f(foundTriangles[i].second.u, foundTriangles[i].second.v);
+            its.mesh = m_mesh;
+            f = foundTriangles[i].first;
+            foundIntersection = true;
+        }
+
+        /*
+        for (uint32_t i = 0; i < foundTriangles.size(); ++i) {
+            uint32_t idx = foundTriangles[i].first;
+
+            if (shadowRay)
+                return true;
+
+            ray.maxt = its.t = foundTriangles[i].second.t;
+            its.uv = Point2f(foundTriangles[i].second.u, foundTriangles[i].second.v);
+            its.mesh = m_mesh;
+            f = foundTriangles[i].first;
+            foundIntersection = true;
+
+            //float u, v, t;
+            //if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
+            //   //  An intersection was found! Can terminate
+            //   //    immediately if this is a shadow ray query 
+            //    if (shadowRay)
+            //        return true;
+            //    ray.maxt = its.t = t;
+            //    its.uv = Point2f(u, v);
+            //    its.mesh = m_mesh;
+            //    f = idx;
+            //    foundIntersection = true;
+            //}
+        }
+        */
     }
-
-    //cout << foundTriangles.size() << endl;
-
-	for (uint32_t i = 0; i < foundTriangles.size(); ++i) {
-        uint32_t idx = foundTriangles[i].first;
-		float u, v, t;
-		if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
-			/* An intersection was found! Can terminate
-			   immediately if this is a shadow ray query */
-			if (shadowRay)
-				return true;
-			ray.maxt = its.t = t;
-			its.uv = Point2f(u, v);
-			its.mesh = m_mesh;
-			f = idx;
-			foundIntersection = true;
-		}
-	}
 
     if (foundIntersection) {
         /* At this point, we now know that there is an intersection,
