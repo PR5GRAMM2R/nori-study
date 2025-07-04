@@ -29,7 +29,7 @@ public:
     ~Node();
 
     BoundingBox3f box = BoundingBox3f();
-    BoundingBox3f boxForCenters = BoundingBox3f();
+    BoundingBox3f tempBox = BoundingBox3f();
     std::vector<uint32_t> triangleIdxs;
     Node* parent = nullptr;
     Node* child[8] = { nullptr, };
@@ -46,11 +46,6 @@ uint32_t scanNodesOctree(Node* node);
 uint32_t scanTrianglesOctree(Node* node);
 void printOctree(Node* node);
 
-struct IdxData {
-    float u;
-    float v;
-    float t;
-};
 
 /**
  * \brief Acceleration data structure for ray intersection queries
