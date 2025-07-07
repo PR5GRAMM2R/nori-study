@@ -38,7 +38,9 @@ Node::Node() {
 }
 
 Node::~Node() {
-    delete[] child;
+    if(hasChild)
+        for(int i = 0; i < OCTREE_CHILDS; i++)
+            delete child[i];
 }
 
 Octree::Octree()
