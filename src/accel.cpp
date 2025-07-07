@@ -1,4 +1,4 @@
-/*
+癤�/*
     This file is part of Nori, a simple educational ray tracer
 
     Copyright (c) 2015 by Wenzel Jakob
@@ -21,178 +21,168 @@
 
 NORI_NAMESPACE_BEGIN
 
-//void Accel::addMesh(Mesh *mesh) {
-//    if (m_mesh)
-//        throw NoriException("Accel: only a single mesh is supported!");
-//    m_mesh = mesh;
-//    m_bbox = m_mesh->getBoundingBox();
+//BoundingBox3f getFullMeshBoundingBox(Mesh* m_mesh)
+//{
+//    BoundingBox3f meshBoundingBox = m_mesh->getBoundingBox(0);;
+//
+//    for (uint32_t idx = 1; idx < m_mesh->getTriangleCount(); ++idx) {
+//        meshBoundingBox.expandBy(m_mesh->getBoundingBox(idx));
+//    }
+//
+//    return meshBoundingBox;
 //}
 
-void Accel::build() {
-    /* Nothing to do here for now */
+Node::Node() {
+
 }
 
-BoundingBox3f getFullMeshBoundingBox(Mesh *m_mesh)
+Node::~Node() {
+    delete[] child;
+}
+
+Octree::Octree()
 {
-    BoundingBox3f meshBoundingBox;
-
-    for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx){
-        BoundingBox3f temp = m_mesh->getBoundingBox(idx);
-        meshBoundingBox.expandBy(temp);
-    }
-
-    return meshBoundingBox;
-}
-
-#define OCTREE_CHILDS 8
-#define OCTREE_NODE_MAX_CAPACITY 10
-#define OCTREE_MAX_DEPTH 6
-
-Node::Node(){
 
 }
 
-Node::~Node(){
-    //for(int i = 0; i < OCTREE_CHILDS; i++){
-        delete[] child;
-    //}
+Octree::~Octree()
+{
+    delete rootNode;
 }
 
-bool beStrict = false;
-
-bool nodeInsert(Mesh *m_mesh, Node* node, uint32_t index){
+bool octreeInsert(Mesh* m_mesh, Node* node, uint32_t index)
+{
     assert(node != nullptr);
     assert(node->depth <= OCTREE_MAX_DEPTH);
-    //BoundingBox3f idxBox = m_mesh->getBoundingBox(index);
-    //assert(node->box.contains(idxBox, false) == true);
-
-    node->totalSize++;
+    //BoundingBox3f idxCenterPointBox(m_mesh->getCentroid(index));
+    //assert(node->tempBox.contains(idxCenterPointBox, false) == true);
 
     if (node->hasChild) {
         BoundingBox3f idxBox = m_mesh->getBoundingBox(index);
 
+        node->box = node->tempBox;
+
         for (int i = 0; i < OCTREE_CHILDS; i++) {
-            if (node->child[i]->tempBox.overlaps(idxBox, false)) {
-                if(beStrict)
-                    return nodeInsert(m_mesh, node->child[i], index);
+			if (node->child[i]->tempBox.overlaps(idxBox, false)) {
+				octreeInsert(m_mesh, node->child[i], index);
+                node->box.expandBy(node->child[i]->box);
+			}
+		}
+	}
+    else {
+        node->triangleIdxs[node->localSize] = index;
+        node->localSize++;
+        node->box.expandBy(m_mesh->getBoundingBox(index));
+
+        assert(node->localSize != OCTREE_MAX_DEPTH_NODE_MAX_CAPACITY);
+
+        Node* nodeTemp = node;
+        for (int depth = node->depth; depth > 0; depth--) {
+            nodeTemp->totalSize++;
+            nodeTemp = nodeTemp->parent;
+        }
+        nodeTemp->totalSize++;
+
+        if (node->depth == OCTREE_MAX_DEPTH) {
+            return true;
+        }
+        else if (node->localSize > OCTREE_NODE_MAX_CAPACITY) {
+            node->box.reset();
+
+            Point3f boxCenter = node->tempBox.getCenter();
+            std::vector<Point3f> boxCorners = node->tempBox.get3DimCorners();
+
+            for (int i = 0; i < OCTREE_CHILDS; i++) {
+                node->child[i] = new Node;
+                node->child[i]->depth = node->depth + 1;
+                node->child[i]->tempBox = BoundingBox3f(boxCorners[i], boxCenter, true);
+                node->child[i]->parent = node;
+                if (node->depth == OCTREE_MAX_DEPTH - 1) {
+                    delete[] node->child[i]->triangleIdxs;
+                    node->child[i]->triangleIdxs = new uint32_t[OCTREE_MAX_DEPTH_NODE_MAX_CAPACITY];
+                }
                 else
-                    nodeInsert(m_mesh, node->child[i], index);
+                    node->child[i]->triangleIdxs = new uint32_t[OCTREE_NODE_MAX_CAPACITY + 1];
             }
-        }
 
-        //cout << "ERROR" << endl;
-        return true;
-    }
-    else if (node->triangleIdxs.size() >= OCTREE_NODE_MAX_CAPACITY && node->depth < OCTREE_MAX_DEPTH) {
-        node->hasChild = true;
-        node->localSize = 0;
+            for (int i = 0; i < node->localSize; i++) {
+                uint32_t idx = node->triangleIdxs[i];
+                BoundingBox3f idxBox = m_mesh->getBoundingBox(idx);
 
-        Node* newNodes = new Node[OCTREE_CHILDS];
-        Point3f boxMin = node->tempBox.min;
-        Point3f boxMax = node->tempBox.max;
-        Point3f boxCenter = (boxMin + boxMax) / 0.5;          /// => 이상하게 좀 더 나은 결과 ㅠ ????????????
-        //Point3f boxCenter = node->tempBox.getCenter();        => 이상함 ㅠ ////////////////////////////
-        std::vector<Point3f> boxCorners = node->tempBox.get3DimCorners();
-
-        //cout << boxCenter.x() << ", " << boxCenter.y() << ", " << boxCenter.z() << endl << endl;
-        //for (int i = 0; i < 8; i++) {
-        //    cout << boxCorners[i].x() << ", " << boxCorners[i].y() << ", " << boxCorners[i].z() << endl;
-        //}
-        //cout << endl;
-
-        for (int i = 0; i < OCTREE_CHILDS; i++) {
-            node->child[i] = &newNodes[i];
-            node->child[i]->depth = node->depth + 1;
-            node->child[i]->tempBox = BoundingBox3f(boxCorners[i], boxCenter, true);
-            node->child[i]->parent = node;
-        }
-
-        node->triangleIdxs.push_back(index);
-
-        for (int i = 0; i < node->triangleIdxs.size(); i++) {
-            uint32_t idx = node->triangleIdxs[i];
-            BoundingBox3f idxBox = m_mesh->getBoundingBox(idx);
-
-            for (int j = 0; j < OCTREE_CHILDS; j++) {
-                if (node->child[j]->tempBox.overlaps(idxBox, false)) {
-                    nodeInsert(m_mesh, node->child[j], idx);
-
-                    break;
+                for (int j = 0; j < OCTREE_CHILDS; j++) {
+                    if (node->child[j]->tempBox.overlaps(idxBox, false)) {
+                        octreeInsert(m_mesh, node->child[j], idx);
+                        node->box.expandBy(node->child[j]->box);
+                    }
                 }
             }
+
+            Node* nodeTemp = node;
+            for (int depth = node->depth; depth > 0; depth--) {
+                nodeTemp->totalSize -= node->localSize;
+                nodeTemp = nodeTemp->parent;
+            }
+            nodeTemp->totalSize -= node->localSize;
+
+            node->hasChild = true;
+            node->localSize = 0;
         }
-
-        node->triangleIdxs.clear();
-
-        return true;
-    }
-    else{
-        node->triangleIdxs.push_back(index);
-        node->localSize++;
-
-        return true;
     }
 
-    cout << "ERROR" << endl;
-    return false;
+    return true;
 }
 
-void makeActualOctreeBox(Mesh* m_mesh, Node* node)
+void makeActualOctreeBox(Mesh* mesh, Node* node)
 {
-    node->box.reset();
-
     if (node->hasChild) {
         for (int i = 0; i < OCTREE_CHILDS; i++) {
-            makeActualOctreeBox(m_mesh, node->child[i]);
+            makeActualOctreeBox(mesh, node->child[i]);
             node->box.expandBy(node->child[i]->box);
         }
     }
     else {
-        if (node->triangleIdxs.empty()) {
-            node->box.expandBy(node->tempBox);
-        }
-        else {
-            for (uint32_t idx = 0; idx < node->triangleIdxs.size(); ++idx) {
-                BoundingBox3f temp = m_mesh->getBoundingBox(idx);
-                node->box.expandBy(temp);
-            }
+        if (node->localSize == 0) {
+            node->box = node->tempBox;
+            return;
         }
 
-        /*Node* nodeTemp = node;
-        for (int depth = node->depth; depth > 0; depth--) {
-            nodeTemp = nodeTemp->parent;
-            nodeTemp->box.expandBy(node->box);
-        }*/
+        node->box = mesh->getBoundingBox(0);
+        for (uint32_t idx = 1; idx < node->localSize; idx++) {
+            BoundingBox3f temp = mesh->getBoundingBox(idx);
+            node->box.expandBy(temp);
+        }
     }
 
-    for (uint32_t idx = 0; idx < node->triangleIdxs.size(); ++idx) {
-        BoundingBox3f temp = m_mesh->getBoundingBox(idx);
+    /*for (uint32_t idx = 0; idx < node->localSize; ++idx) {
+        BoundingBox3f temp = mesh->getBoundingBox(idx);
         assert(node->box.contains(temp, false) == true);
-    }
+    }*/
 
     return;
 }
 
-Node* buildOctree(Mesh* m_mesh)
+bool Octree::buildOctree(Mesh* mesh)
 {
-    BoundingBox3f meshBoundingBox = getFullMeshBoundingBox(m_mesh);
+    BoundingBox3f meshBoundingBox = mesh->getBoundingBox();
 
-    Node* octree = new Node;
-    octree->tempBox = meshBoundingBox;
-    octree->hasChild = false;
-    octree->depth = 0;
-    
-    for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx){
-        nodeInsert(m_mesh, octree, idx);
+    rootNode = new Node;
+    rootNode->tempBox = meshBoundingBox;
+    rootNode->hasChild = false;
+    rootNode->depth = 0;
+
+    for (uint32_t idx = 0; idx < mesh->getTriangleCount(); ++idx) {
+        octreeInsert(mesh, rootNode, idx);
     }
 
-    return octree;
+    //makeActualOctreeBox(mesh, rootNode);
+
+    if (rootNode->box == meshBoundingBox)
+        return true;
+
+    return false;
 }
 
-uint32_t nodeCount = 0;
-uint32_t trianglesCount = 0;
-
-uint32_t scanNodesOctree(Node* node)
+void Octree::scanNodesOctree(Node* node)
 {
     //static uint32_t nodeCount = 0;
 
@@ -204,10 +194,10 @@ uint32_t scanNodesOctree(Node* node)
         }
     }
 
-    return nodeCount;
+    return;
 }
 
-uint32_t scanTrianglesOctree(Node* node)
+void Octree::scanTrianglesOctree(Node* node)
 {
     //static uint32_t trianglesCount = 0;
 
@@ -219,141 +209,55 @@ uint32_t scanTrianglesOctree(Node* node)
         }
     }
 
-    return trianglesCount;
-}
-
-void printOctree(Node* node)
-{
-    printf("%d Depth -> %lu Counts\n", node->depth, node->totalSize);
-
-    for (int i = 0; i < node->depth; i++) {
-        cout << "=====||";
-    }
-    cout << endl;
-
-    if (node->hasChild) {
-        for (int i = 0; i < OCTREE_CHILDS; i++) {
-            printOctree(node->child[i]);
-        }
-    }
-
     return;
 }
 
-void Accel::addMesh(Mesh* mesh) {
+void Accel::addMesh(Mesh *mesh) {
     if (m_mesh)
         throw NoriException("Accel: only a single mesh is supported!");
     m_mesh = mesh;
     m_bbox = m_mesh->getBoundingBox();
 
-    {
-        octree = buildOctree(m_mesh);
-        makeActualOctreeBox(m_mesh, octree);
+    cout << "Done Loading mesh." << endl;
 
-        std::cout << "root box min: " << octree->box.min.transpose()
-            << "  max: " << octree->box.max.transpose() << std::endl;
+    bool isOctreeNormal = octree.buildOctree(m_mesh);
+    assert(isOctreeNormal == true);
 
-        std::cout << "root centerBox min: " << octree->tempBox.min.transpose()
-            << "  max: " << octree->tempBox.max.transpose() << std::endl;
+    std::cout << "root box min: " << octree.rootNode->box.min.transpose()
+        << "  max: " << octree.rootNode->box.max.transpose() << std::endl;
 
-        //printOctree(octree);
-        scanNodesOctree(octree);
-        cout << "Octree's node Count : " << nodeCount << endl;// scanNodesOctree(octree) << endl;
-        scanTrianglesOctree(octree);
-        cout << "Octree's triangle Count : " << trianglesCount << endl;// scanTrianglesOctree(octree) << endl;
-    }
+    std::cout << "root centerBox min: " << octree.rootNode->tempBox.min.transpose()
+        << "  max: " << octree.rootNode->tempBox.max.transpose() << std::endl;
+
+    octree.scanNodesOctree(octree.rootNode);
+    cout << "Octree's node Count : " << octree.nodeCount << endl;// scanNodesOctree(octree) << endl;
+    octree.scanTrianglesOctree(octree.rootNode);
+    cout << "Octree's triangle Count : " << octree.trianglesCount << endl;// scanTrianglesOctree(octree) << endl;
 }
 
-void sortFoundBoxes(std::vector<std::pair<Node*, float>>& boxes)
-{
-    std::sort(boxes.begin(), boxes.end(),
-        [](const auto& a, const auto& b) {
-            return a.second < b.second;  // second(nearT) 기준 오름차순
-        });
-
-    return;
+void Accel::build() {
+    /* Nothing to do here for now */
 }
 
-std::vector<std::pair<Node*, float>> findIntersectedBoxes(Node* node, const Ray3f& ray_)
-{
-    std::vector<std::pair<Node*, float>> foundBoxesTemp;
-    float nearT, farT;
-
-    if (node->box.rayIntersect(ray_, nearT, farT)) {
-        if (node->hasChild) {
-            std::vector<std::pair<Node*, float>> temp;
-
-            for (int i = 0; i < OCTREE_CHILDS; i++) {
-                temp = findIntersectedBoxes(node->child[i], ray_);
-                if (!temp.empty()) {
-                    foundBoxesTemp.insert(foundBoxesTemp.end(), temp.begin(), temp.end());
-                }
-            }
-
-            return foundBoxesTemp;
-        }
-        else {
-            if(!node->triangleIdxs.empty())
-                return { std::pair<Node*, float>(node, nearT) };
-        }
-    }
-
-    return {};
-}
-
-bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const {    
+bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const {
     bool foundIntersection = false;  // Was an intersection found so far?
     uint32_t f = (uint32_t) -1;      // Triangle index of the closest intersection
 
     Ray3f ray(ray_); /// Make a copy of the ray (we will need to update its '.maxt' value)
-    
-    ///* Brute force search through all triangles */
-    //{
-    //    for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx) {
-    //        float u, v, t;
-    //        if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
-    //            /* An intersection was found! Can terminate
-    //               immediately if this is a shadow ray query */
-    //            if (shadowRay)
-    //                return true;
-    //            ray.maxt = its.t = t;
-    //            its.uv = Point2f(u, v);
-    //            its.mesh = m_mesh;
-    //            f = idx;
-    //            foundIntersection = true;
-    //        }
-    //    }
-    //}
 
-    {
-        std::vector<std::pair<Node*, float>> foundBoxes = findIntersectedBoxes(octree, ray);
-
-        sortFoundBoxes(foundBoxes);
-
-        for (auto foundBox : foundBoxes) {
-            float u, v, t;
-            bool isTriangleFound = false;
-
-            for (uint32_t idx : foundBox.first->triangleIdxs) {
-                if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
-                    if (shadowRay)
-                        return true;
-
-                    ray.maxt = its.t = t;
-                    its.uv = Point2f(u, v);
-                    its.mesh = m_mesh;
-                    f = idx;
-
-                    isTriangleFound = true;
-                    break;
-                }
-            }
-
-            if (!isTriangleFound)
-                continue;
-
+    /* Brute force search through all triangles */
+    for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx) {
+        float u, v, t;
+        if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
+            /* An intersection was found! Can terminate
+               immediately if this is a shadow ray query */
+            if (shadowRay)
+                return true;
+            ray.maxt = its.t = t;
+            its.uv = Point2f(u, v);
+            its.mesh = m_mesh;
+            f = idx;
             foundIntersection = true;
-            break;
         }
     }
 

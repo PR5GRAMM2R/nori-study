@@ -1,4 +1,4 @@
-/*
+﻿/*
     This file is part of Nori, a simple educational ray tracer
 
     Copyright (c) 2015 by Wenzel Jakob
@@ -21,6 +21,11 @@
 #include <nori/mesh.h>
 #include <nori/bbox.h>
 
+#define OCTREE_CHILDS 8
+#define OCTREE_NODE_MAX_CAPACITY 10
+#define OCTREE_MAX_DEPTH_NODE_MAX_CAPACITY 1000
+#define OCTREE_MAX_DEPTH 6
+
 NORI_NAMESPACE_BEGIN
 
 class Node {
@@ -30,7 +35,8 @@ public:
 
     BoundingBox3f box = BoundingBox3f();
     BoundingBox3f tempBox = BoundingBox3f();
-    std::vector<uint32_t> triangleIdxs;
+    //std::vector<uint32_t> triangleIdxs;
+    uint32_t* triangleIdxs = new uint32_t[OCTREE_NODE_MAX_CAPACITY + 1];
     Node* parent = nullptr;
     Node* child[8] = { nullptr, };
     bool hasChild = false;
@@ -39,13 +45,19 @@ public:
     int totalSize = 0;
 };
 
-Node* buildOctree(Mesh* mesh);
-bool nodeInsert(Mesh* m_mesh, Node* node, uint32_t index);
-void makeActualOctreeBox(Mesh* m_mesh, Node* node);
-uint32_t scanNodesOctree(Node* node);
-uint32_t scanTrianglesOctree(Node* node);
-void printOctree(Node* node);
+class Octree {
+public:
+    Node* rootNode = new Node;
+    uint32_t nodeCount = 0;
+    uint32_t trianglesCount = 0;
 
+    Octree();
+    ~Octree();
+
+    bool buildOctree(Mesh* mesh);
+    void scanNodesOctree(Node* node);
+    void scanTrianglesOctree(Node* node);
+};
 
 /**
  * \brief Acceleration data structure for ray intersection queries
@@ -93,7 +105,7 @@ public:
 private:
     Mesh         *m_mesh = nullptr; ///< Mesh (only a single one for now)
     BoundingBox3f m_bbox;           ///< Bounding box of the entire scene
-    Node* octree;
+    Octree octree;
 };
 
 NORI_NAMESPACE_END
