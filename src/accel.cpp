@@ -18,6 +18,7 @@
 
 #include <nori/accel.h>
 #include <Eigen/Geometry>
+#include <chrono>
 
 NORI_NAMESPACE_BEGIN
 
@@ -218,10 +219,16 @@ void Accel::addMesh(Mesh *mesh) {
     m_mesh = mesh;
     m_bbox = m_mesh->getBoundingBox();
 
-    cout << "Done Loading mesh." << endl;
+    cout << "Loading mesh Completed." << endl;
+
+    auto start = std::chrono::high_resolution_clock::now();
 
     bool isOctreeNormal = octree.buildOctree(m_mesh);
     assert(isOctreeNormal == true);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    cout << "Making Octree took " << duration.count() << "ms." << std::endl;
 
     std::cout << "root box min: " << octree.rootNode->box.min.transpose()
         << "  max: " << octree.rootNode->box.max.transpose() << std::endl;
@@ -239,25 +246,112 @@ void Accel::build() {
     /* Nothing to do here for now */
 }
 
+std::vector<std::pair<Node*, float>> findIntersectedBoxes(Node* node, const Ray3f& ray_)
+{
+    std::vector<std::pair<Node*, float>> foundBoxesTemp;
+    float nearT, farT;
+
+    if (node->box.rayIntersect(ray_, nearT, farT)) {
+        if (node->hasChild) {
+            std::vector<std::pair<Node*, float>> temp;
+
+            for (int i = 0; i < OCTREE_CHILDS; i++) {
+                temp = findIntersectedBoxes(node->child[i], ray_);
+                if (!temp.empty()) {
+                    foundBoxesTemp.insert(foundBoxesTemp.end(), temp.begin(), temp.end());
+                }
+            }
+
+            return foundBoxesTemp;
+        }
+        else {
+            if (node->localSize != 0)
+                return { std::pair<Node*, float>(node, nearT) };
+            else
+                return {};
+        }
+    }
+
+    return {};
+}
+
+void sortFoundBoxes(std::vector<std::pair<Node*, float>>& boxes)
+{
+    std::sort(boxes.begin(), boxes.end(),
+        [](const auto& a, const auto& b) {
+            return a.second < b.second;
+        });
+
+    return;
+}
+
+void sortFoundTriangles(std::vector<std::pair<uint32_t, float>>& triangles)
+{
+    std::sort(triangles.begin(), triangles.end(),
+        [](const auto& a, const auto& b) {
+            return a.second < b.second;
+        });
+
+    return;
+}
+
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const {
     bool foundIntersection = false;  // Was an intersection found so far?
     uint32_t f = (uint32_t) -1;      // Triangle index of the closest intersection
 
     Ray3f ray(ray_); /// Make a copy of the ray (we will need to update its '.maxt' value)
 
-    /* Brute force search through all triangles */
-    for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx) {
-        float u, v, t;
-        if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
-            /* An intersection was found! Can terminate
-               immediately if this is a shadow ray query */
-            if (shadowRay)
-                return true;
+    ///* Brute force search through all triangles */
+    //for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx) {
+    //    float u, v, t;
+    //    if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
+    //        /* An intersection was found! Can terminate
+    //           immediately if this is a shadow ray query */
+    //        if (shadowRay)
+    //            return true;
+    //        ray.maxt = its.t = t;
+    //        its.uv = Point2f(u, v);
+    //        its.mesh = m_mesh;
+    //        f = idx;
+    //        foundIntersection = true;
+    //    }
+    //}
+
+    if (shadowRay)
+        return true;
+
+    {
+        std::vector<std::pair<Node*, float>> foundBoxes = findIntersectedBoxes(octree.rootNode, ray);
+
+        //sortFoundBoxes(foundBoxes);
+
+        std::vector<std::pair<uint32_t, float>> foundTriangles;
+
+        for (auto foundBox : foundBoxes) {
+            float u, v, t;
+
+            for (uint32_t i = 0; i < foundBox.first->localSize; i++) {
+                uint32_t idx = foundBox.first->triangleIdxs[i];
+
+                if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
+                    foundTriangles.push_back(std::pair<uint32_t, float>(idx, t));
+                    foundIntersection = true;
+                }
+            }
+        }
+
+        sortFoundTriangles(foundTriangles);
+
+        if (foundIntersection) {
+            float u, v, t;
+            uint32_t idx = foundTriangles[0].first;
+
+            m_mesh->rayIntersect(idx, ray, u, v, t);
+
             ray.maxt = its.t = t;
             its.uv = Point2f(u, v);
             its.mesh = m_mesh;
             f = idx;
-            foundIntersection = true;
         }
     }
 
