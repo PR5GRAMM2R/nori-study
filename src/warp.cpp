@@ -55,45 +55,92 @@ float Warp::squareToTentPdf(const Point2f &p) {
 
 Point2f Warp::squareToUniformDisk(const Point2f &sample) {
     //throw NoriException("Warp::squareToUniformDisk() is not yet implemented!");
-    if (std::pow(sample.x(), 2.0) + std::pow(sample.y(), 2.0) <= 1.0)               ////////////////////////
-        return sample;
+    return Point2f(std::sqrt(sample.x()) * std::cos(2.0 * M_PI * sample.y()),
+        std::sqrt(sample.x()) * std::sin(2.0 * M_PI * sample.y()));
 }
 
 float Warp::squareToUniformDiskPdf(const Point2f &p) {
     //throw NoriException("Warp::squareToUniformDiskPdf() is not yet implemented!");
-    return (std::pow(p.x(), 2.0) + std::pow(p.y(), 2.0) <= 1.0) ? 1.0f : 0.0f;      ////////////////////////
+    if (p.x() * p.x() + p.y() * p.y() <= 1.0f)
+        return 1.0f / M_PI;
+    else
+        return 0.0f;
 }
 
 Vector3f Warp::squareToUniformSphere(const Point2f &sample) {
-    throw NoriException("Warp::squareToUniformSphere() is not yet implemented!");
+    //throw NoriException("Warp::squareToUniformSphere() is not yet implemented!");
+    float theta = 2.0f * M_PI * sample.x();
+    float z = 1.0f - 2.0f * sample.y();
+    float r = std::sqrt(std::max(0.0f, 1.0f - z * z));
+
+    return Vector3f(
+        r * std::cos(theta),
+        r * std::sin(theta),
+        z
+    );
 }
 
 float Warp::squareToUniformSpherePdf(const Vector3f &v) {
-    throw NoriException("Warp::squareToUniformSpherePdf() is not yet implemented!");
+    //throw NoriException("Warp::squareToUniformSpherePdf() is not yet implemented!");
+    if (v.x() * v.x() + v.y() * v.y() + v.z() * v.z() <= 1.0f)
+        return 1.0f / (4.0 * M_PI);
+    else
+        return 0.0f;
 }
 
 Vector3f Warp::squareToUniformHemisphere(const Point2f &sample) {
-    throw NoriException("Warp::squareToUniformHemisphere() is not yet implemented!");
+    //throw NoriException("Warp::squareToUniformHemisphere() is not yet implemented!");
+    float theta = 2.0f * M_PI * sample.x();
+    float z = 1.0f - 2.0f * sample.y();
+    float r = std::sqrt(std::max(0.0f, 1.0f - z * z));
+
+    Vector3f uniformSphere = Vector3f(
+        r * std::cos(theta),
+        r * std::sin(theta),
+        z
+    );
+
+    return (uniformSphere.dot(Vector3f(0, 0, 1)) > 0) ? uniformSphere : -uniformSphere;
 }
 
 float Warp::squareToUniformHemispherePdf(const Vector3f &v) {
-    throw NoriException("Warp::squareToUniformHemispherePdf() is not yet implemented!");
+    //throw NoriException("Warp::squareToUniformHemispherePdf() is not yet implemented!");
+    if (v.x() * v.x() + v.y() * v.y() + v.z() * v.z() <= 1.0f && v.z() >= 0)
+        return 1.0f / (2.0 * M_PI);
+    else
+        return 0.0f;
 }
 
 Vector3f Warp::squareToCosineHemisphere(const Point2f &sample) {
-    throw NoriException("Warp::squareToCosineHemisphere() is not yet implemented!");
+    //throw NoriException("Warp::squareToCosineHemisphere() is not yet implemented!");
+    Point2f d = Warp::squareToUniformDisk(sample);
+
+    float x = d.x();
+    float y = d.y();
+    float z = std::sqrt(std::max(0.0f, 1.0f - x * x - y * y));
+
+    return Vector3f(x, y, z);
 }
 
 float Warp::squareToCosineHemispherePdf(const Vector3f &v) {
-    throw NoriException("Warp::squareToCosineHemispherePdf() is not yet implemented!");
+    //throw NoriException("Warp::squareToCosineHemispherePdf() is not yet implemented!");
+    return v.z() > 0 ? v.z() / M_PI : 0.0f;
 }
 
 Vector3f Warp::squareToBeckmann(const Point2f &sample, float alpha) {
-    throw NoriException("Warp::squareToBeckmann() is not yet implemented!");
+    //throw NoriException("Warp::squareToBeckmann() is not yet implemented!");
+
+    return Vector3f(0, 0, 0);
 }
 
 float Warp::squareToBeckmannPdf(const Vector3f &m, float alpha) {
-    throw NoriException("Warp::squareToBeckmannPdf() is not yet implemented!");
+    //throw NoriException("Warp::squareToBeckmannPdf() is not yet implemented!");
+    float theta = std::acos(m.z());
+    float phi = std::acos(m.x() / std::sin(theta));
+
+    return (1.0 / (2.0 * M_PI)) * 
+        2.0 * std::exp(-std::pow(std::tan(theta), 2) / std::pow(alpha, 2)) /
+        (std::fmax(1e-6f, std::pow(alpha, 2)) * std::pow(std::fmax(1e-6f, std::cos(theta)), 3));
 }
 
 NORI_NAMESPACE_END
