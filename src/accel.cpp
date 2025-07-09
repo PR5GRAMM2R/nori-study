@@ -248,33 +248,68 @@ void Accel::build() {
     /* Nothing to do here for now */
 }
 
-std::vector<std::pair<Node*, float>> findIntersectedBoxes(Node* node, const Ray3f& ray_)
+//std::vector<std::pair<Node*, float>> findIntersectedBoxes(Node* node, const Ray3f& ray_)
+//{
+//    std::vector<std::pair<Node*, float>> foundBoxesTemp;
+//    float nearT, farT;
+//
+//    if (node->box.rayIntersect(ray_, nearT, farT)) {
+//        if (node->hasChild) {
+//            std::vector<std::pair<Node*, float>> temp;
+//
+//            for (int i = 0; i < OCTREE_CHILDS; i++) {
+//                temp = findIntersectedBoxes(node->child[i], ray_);
+//                if (!temp.empty()) {
+//                    foundBoxesTemp.insert(foundBoxesTemp.end(), temp.begin(), temp.end());
+//                }
+//            }
+//
+//            return foundBoxesTemp;
+//        }
+//        else {
+//            if (node->localSize != 0)
+//                return { std::pair<Node*, float>(node, nearT) };
+//            else
+//                return {};
+//        }
+//    }
+//
+//    return {};
+//}
+
+std::vector<std::pair<Node*, float>>
+findIntersectedBoxes(Node* root, const Ray3f& ray_)
 {
-    std::vector<std::pair<Node*, float>> foundBoxesTemp;
-    float nearT, farT;
+    std::vector<std::pair<Node*, float>> result;     // 최종 반환용
+    if (!root) return result;
 
-    if (node->box.rayIntersect(ray_, nearT, farT)) {
+    /* ---- ① DFS용 스택 준비 ---- */
+    std::vector<Node*> stack;
+    stack.push_back(root);
+
+    /* ---- ② 반복 순회 ---- */
+    while (!stack.empty()) {
+        Node* node = stack.back();
+        stack.pop_back();
+
+        float nearT, farT;
+        if (!node->box.rayIntersect(ray_, nearT, farT))
+            continue;                                // 이 노드와 자식 모두 스킵
+
         if (node->hasChild) {
-            std::vector<std::pair<Node*, float>> temp;
-
-            for (int i = 0; i < OCTREE_CHILDS; i++) {
-                temp = findIntersectedBoxes(node->child[i], ray_);
-                if (!temp.empty()) {
-                    foundBoxesTemp.insert(foundBoxesTemp.end(), temp.begin(), temp.end());
-                }
+            /* 내부 노드 ─ 자식들을 스택에 push */
+            for (int i = 0; i < OCTREE_CHILDS; ++i) {
+                if (node->child[i])
+                    stack.push_back(node->child[i]);
             }
-
-            return foundBoxesTemp;
         }
         else {
+            /* 리프 노드 ─ 삼각형이 있다면 결과에 추가 */
             if (node->localSize != 0)
-                return { std::pair<Node*, float>(node, nearT) };
-            else
-                return {};
+                result.emplace_back(node, nearT);    // (Node*, 교차 거리)
         }
     }
-
-    return {};
+    return result;
 }
 
 void sortFoundBoxes(std::vector<std::pair<Node*, float>>& boxes)
@@ -322,9 +357,9 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     {
         std::vector<std::pair<Node*, float>> foundBoxes = findIntersectedBoxes(octree.rootNode, ray);
 
-        //sortFoundBoxes(foundBoxes);
+        sortFoundBoxes(foundBoxes);
 
-        std::vector<std::pair<uint32_t, float>> foundTriangles;
+        /*std::vector<std::pair<uint32_t, float>> foundTriangles;
 
         for (auto foundBox : foundBoxes) {
             float u, v, t;
@@ -342,11 +377,46 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
             }
         }
 
-        sortFoundTriangles(foundTriangles);
+        sortFoundTriangles(foundTriangles);*/
+
+        uint32_t foundTriangle = -1;
+        float foundTriangleDistance = INFINITY;
+
+        for (auto foundBox : foundBoxes) {
+            float u, v, t;
+
+            uint32_t foundTriangleTemp;
+            float foundTriangleDistanceTemp = foundTriangleDistance;
+
+            for (uint32_t i = 0; i < foundBox.first->localSize; i++) {
+                uint32_t idx = foundBox.first->triangleIdxs[i];
+
+                if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
+                    if (shadowRay)
+                        return true;
+
+                    if (t < foundTriangleDistance) {
+                        foundTriangleTemp = idx;
+                        foundTriangleDistanceTemp = t;
+                        foundIntersection = true;
+                    }
+                }
+            }
+
+            if (foundIntersection) {
+                if (foundTriangleDistanceTemp < foundTriangleDistance) {
+                    foundTriangle = foundTriangleTemp;
+                    foundTriangleDistance = foundTriangleDistanceTemp;
+                }
+                else {
+                    break;
+                }
+            }
+        }
 
         if (foundIntersection) {
             float u, v, t;
-            uint32_t idx = foundTriangles[0].first;
+            uint32_t idx = foundTriangle;
 
             m_mesh->rayIntersect(idx, ray, u, v, t);
 

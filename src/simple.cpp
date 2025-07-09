@@ -29,7 +29,7 @@ public:
 
         float visible;
         Ray3f rayFromIntersection(p, dirToLight, 1e-4f, dirToLightDistance);
-        visible = (scene->getAccel()->rayIntersect(rayFromIntersection, its, false)) ? 0.0 : 1.0;
+        visible = (scene->getAccel()->rayIntersect(rayFromIntersection, its, true)) ? 0.0 : 1.0;
 
         return Color3f((light.energy / (4.0 * std::pow(M_PI, 2))) *
             (std::fmax(0, n.dot(dirToLight) / std::pow(dirToLightDistance, 2))) *

@@ -6,7 +6,7 @@
 
 NORI_NAMESPACE_BEGIN
 
-#define MAX_SAMPLES 10
+#define MAX_SAMPLES 1
 
 class AOIntegrator : public Integrator {
 public:
@@ -32,7 +32,7 @@ public:
             sample = Point2f(rng.nextFloat(), rng.nextFloat());
             rayFromIntersectionDir = Warp::squareToUniformSphere(sample);
             Ray3f rayFromIntersection(p, rayFromIntersectionDir, 1e-4f, INFINITY);
-            hitValue = (scene->getAccel()->rayIntersect(rayFromIntersection, its, false)) ? 1.0 : 0.0;
+            hitValue = (scene->getAccel()->rayIntersect(rayFromIntersection, its, true)) ? 1.0 : 0.0;
             result += hitValue * (std::fmax(0, n.dot(rayFromIntersectionDir)) / M_PI);
         }
 
