@@ -319,9 +319,6 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     //    }
     //}
 
-    if (shadowRay)
-        return true;
-
     {
         std::vector<std::pair<Node*, float>> foundBoxes = findIntersectedBoxes(octree.rootNode, ray);
 
@@ -336,6 +333,9 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
                 uint32_t idx = foundBox.first->triangleIdxs[i];
 
                 if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
+                    if (shadowRay)
+                        return true;
+
                     foundTriangles.push_back(std::pair<uint32_t, float>(idx, t));
                     foundIntersection = true;
                 }
