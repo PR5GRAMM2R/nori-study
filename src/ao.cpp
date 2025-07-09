@@ -6,7 +6,7 @@
 
 NORI_NAMESPACE_BEGIN
 
-#define MAX_SAMPLES 10
+#define MAX_SAMPLES 25
 
 class AOIntegrator : public Integrator {
 public:
