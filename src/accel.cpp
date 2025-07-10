@@ -248,22 +248,21 @@ void Accel::build() {
     /* Nothing to do here for now */
 }
 
-void findIntersectedBoxes (Node* node, const Ray3f& ray_, std::vector<std::pair<Node*, float>>& foundBoxes)
+void findIntersectedBoxes(Node* node, const Ray3f& ray_, std::vector<std::pair<Node*, float>>& foundBoxes, float nearT, float farT)
 {
-    float nearT, farT;
-
     if (node->hasChild) {
         for (int i = 0; i < OCTREE_CHILDS; i++) {
-            if(node->child[i]->box.rayIntersect(ray_))
-                findIntersectedBoxes(node->child[i], ray_, foundBoxes);
+            if (node->child[i]->box.rayIntersect(ray_))
+                findIntersectedBoxes(node->child[i], ray_, foundBoxes, nearT, farT);
         }
     }
-	else {
+    else {
         if (node->localSize != 0) {
-            node->box.rayIntersect(ray_, nearT, farT);
-            foundBoxes.push_back(std::pair<Node*, float>(node, farT));
+            //node->box.rayIntersect(ray_, nearT, farT);
+            //foundBoxes.push_back(std::pair<Node*, float>(node, farT));
+            foundBoxes.emplace_back(std::pair<Node*, float>(node, farT));
         }
-		return;
+        return;
     }
 
     return;
@@ -323,8 +322,9 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     {
         //auto start = std::chrono::high_resolution_clock::now();                                    ////////////////////
 
+        float nearT, farT;
         std::vector<std::pair<Node*, float>> foundBoxes;
-        findIntersectedBoxes(octree.rootNode, ray, foundBoxes);
+        findIntersectedBoxes(octree.rootNode, ray, foundBoxes, nearT, farT);
 
         //auto end = std::chrono::high_resolution_clock::now();
         //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
