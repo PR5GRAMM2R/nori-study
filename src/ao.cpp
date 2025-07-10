@@ -64,6 +64,7 @@ protected:
     Point2f* sample;
     Vector3f* rayFromIntersectionDir;
     float* rayFromIntersectionDirProb;
+    Intersection its;
 };
 
 NORI_REGISTER_CLASS(AOIntegrator, "ao");

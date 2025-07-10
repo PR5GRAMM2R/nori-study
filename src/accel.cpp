@@ -248,70 +248,6 @@ void Accel::build() {
     /* Nothing to do here for now */
 }
 
-//std::vector<std::pair<Node*, float>> findIntersectedBoxes(Node* node, const Ray3f& ray_)
-//{
-//    std::vector<std::pair<Node*, float>> foundBoxesTemp;
-//    float nearT, farT;
-//
-//    if (node->box.rayIntersect(ray_, nearT, farT)) {
-//        if (node->hasChild) {
-//            std::vector<std::pair<Node*, float>> temp;
-//
-//            for (int i = 0; i < OCTREE_CHILDS; i++) {
-//                temp = findIntersectedBoxes(node->child[i], ray_);
-//                if (!temp.empty()) {
-//                    foundBoxesTemp.insert(foundBoxesTemp.end(), temp.begin(), temp.end());
-//                }
-//            }
-//
-//            return foundBoxesTemp;
-//        }
-//        else {
-//            if (node->localSize != 0)
-//                return { std::pair<Node*, float>(node, nearT) };
-//            else
-//                return {};
-//        }
-//    }
-//
-//    return {};
-//}
-
-//std::vector<std::pair<Node*, float>>
-//findIntersectedBoxes(Node* root, const Ray3f& ray_)
-//{
-//    std::vector<std::pair<Node*, float>> result;     // 최종 반환용
-//    if (!root) return result;
-//
-//    /* ---- ① DFS용 스택 준비 ---- */
-//    std::vector<Node*> stack;
-//    stack.push_back(root);
-//
-//    /* ---- ② 반복 순회 ---- */
-//    while (!stack.empty()) {
-//        Node* node = stack.back();
-//        stack.pop_back();
-//
-//        float nearT, farT;
-//        if (!node->box.rayIntersect(ray_, nearT, farT))
-//            continue;                                // 이 노드와 자식 모두 스킵
-//
-//        if (node->hasChild) {
-//            /* 내부 노드 ─ 자식들을 스택에 push */
-//            for (int i = 0; i < OCTREE_CHILDS; ++i) {
-//                if (node->child[i])
-//                    stack.push_back(node->child[i]);
-//            }
-//        }
-//        else {
-//            /* 리프 노드 ─ 삼각형이 있다면 결과에 추가 */
-//            if (node->localSize != 0)
-//                result.emplace_back(node, nearT);    // (Node*, 교차 거리)
-//        }
-//    }
-//    return result;
-//}
-
 void findIntersectedBoxes (Node* node, const Ray3f& ray_, std::vector<std::pair<Node*, float>>& foundBoxes)
 {
     float nearT, farT;
@@ -333,34 +269,6 @@ void findIntersectedBoxes (Node* node, const Ray3f& ray_, std::vector<std::pair<
     return;
 }
 
-//void findIntersectedBoxes
-//    (Node* node, const Ray3f& ray_, std::pair<Node*, float>*& foundBoxes, uint16_t& foundBoxesSize)
-//{
-//    float nearT, farT;
-//
-//    if (foundBoxesSize == 100)
-//        return;
-//
-//    if (node->box.rayIntersect(ray_, nearT, farT)) {
-//        if (node->hasChild) {
-//            for (int i = 0; i < OCTREE_CHILDS; i++) {
-//                findIntersectedBoxes(node->child[i], ray_, foundBoxes, foundBoxesSize);
-//            }
-//        }
-//        else {
-//            if (node->localSize != 0) {
-//                foundBoxes[foundBoxesSize].first = node;
-//                foundBoxes[foundBoxesSize].second = nearT;
-//                foundBoxesSize++;
-//            }
-//            else
-//                return;
-//        }
-//    }
-//
-//    return;
-//}
-
 void sortFoundBoxes(std::vector<std::pair<Node*, float>>& boxes)
 {
     std::sort(boxes.begin(), boxes.end(),
@@ -370,16 +278,6 @@ void sortFoundBoxes(std::vector<std::pair<Node*, float>>& boxes)
 
     return;
 }
-
-//void sortFoundBoxes(std::pair<Node*, float>* boxes, uint16_t foundBoxesSize)
-//{
-//    std::sort(boxes, boxes + foundBoxesSize,
-//        [](const std::pair<Node*, float>& a,
-//            const std::pair<Node*, float>& b)
-//        {
-//            return a.second < b.second;
-//        });
-//}
 
 void sortFoundTriangles(std::vector<std::pair<uint32_t, float>>& triangles)
 {
@@ -414,58 +312,31 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     //}
 
     {
-        auto start = std::chrono::high_resolution_clock::now();                                    ////////////////////
-
-        //std::vector<std::pair<Node*, float>> foundBoxes = findIntersectedBoxes(octree.rootNode, ray);
+        //auto start = std::chrono::high_resolution_clock::now();                                    ////////////////////
 
         std::vector<std::pair<Node*, float>> foundBoxes;
         findIntersectedBoxes(octree.rootNode, ray, foundBoxes);
 
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        //auto end = std::chrono::high_resolution_clock::now();
+        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         //if (ray.o.x() - -65.605499 > 1e-3f)
             //printf("11111 findIntersectedBoxes %f => %lld us.\n", ray.o.x(), duration.count());
 
-        //std::pair<Node*, float>* foundBoxes = new std::pair<Node*, float>[100];
-        //uint16_t foundBoxesSize = 0;
-        //findIntersectedBoxes(octree.rootNode, ray, foundBoxes, foundBoxesSize);
-
-        start = std::chrono::high_resolution_clock::now();                                    ////////////////////
+        //start = std::chrono::high_resolution_clock::now();                                    ////////////////////
 
         sortFoundBoxes(foundBoxes);
-        //sortFoundBoxes(foundBoxes, foundBoxesSize);
 
-        end = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        //end = std::chrono::high_resolution_clock::now();
+        //duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         //if (ray.o.x() - -65.605499 > 1e-6f)
             //printf("22222 sortFoundBoxes %f => %lld us.\n", ray.o.x(), duration.count());
-
-        /*std::vector<std::pair<uint32_t, float>> foundTriangles;
-
-        for (auto foundBox : foundBoxes) {
-            float u, v, t;
-
-            for (uint32_t i = 0; i < foundBox.first->localSize; i++) {
-                uint32_t idx = foundBox.first->triangleIdxs[i];
-
-                if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
-                    if (shadowRay)
-                        return true;
-
-                    foundTriangles.push_back(std::pair<uint32_t, float>(idx, t));
-                    foundIntersection = true;
-                }
-            }
-        }
-
-        sortFoundTriangles(foundTriangles);*/
 
         uint32_t foundTriangle = -1;
         float foundTriangleDistance = INFINITY;
 
         std::pair<Node*, float> foundBox;
 
-        start = std::chrono::high_resolution_clock::now();                                    ////////////////////
+        //start = std::chrono::high_resolution_clock::now();                                    ////////////////////
 
         for (int i = 0; i < foundBoxes.size(); i++) {//foundBoxesSize; i++) {
             foundBox = foundBoxes[i];
@@ -511,14 +382,14 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
             its.mesh = m_mesh;
             f = idx;
 
-            end = std::chrono::high_resolution_clock::now();
-            duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            //end = std::chrono::high_resolution_clock::now();
+            //duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
             //if (ray.o.x() - -65.605499 > 1e-6f)
                 //printf("33333 foundTriangle %f => %lld us.\n", ray.o.x(), duration.count());
         }
     }
 
-    auto start = std::chrono::high_resolution_clock::now();                                    ////////////////////
+    //auto start = std::chrono::high_resolution_clock::now();                                    ////////////////////
 
     if (foundIntersection) {
         /* At this point, we now know that there is an intersection,
@@ -573,8 +444,8 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
         }
     }
 
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    //auto end = std::chrono::high_resolution_clock::now();
+    //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     //if(ray.o.x() - -65.605499 > 1e-6f)
         //printf("44444 foundIntersection %f => %lld us.\n", ray.o.x(), duration.count());
 
