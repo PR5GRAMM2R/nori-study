@@ -252,18 +252,18 @@ void findIntersectedBoxes (Node* node, const Ray3f& ray_, std::vector<std::pair<
 {
     float nearT, farT;
 
-    if (node->box.rayIntersect(ray_, nearT, farT)) {
-        if (node->hasChild) {
-            for (int i = 0; i < OCTREE_CHILDS; i++) {
+    if (node->hasChild) {
+        for (int i = 0; i < OCTREE_CHILDS; i++) {
+            if(node->child[i]->box.rayIntersect(ray_))
                 findIntersectedBoxes(node->child[i], ray_, foundBoxes);
-            }
         }
-        else {
-            if (node->localSize != 0)
-                foundBoxes.push_back(std::pair<Node*, float>(node, nearT));
-            else
-                return;
+    }
+	else {
+        if (node->localSize != 0) {
+            node->box.rayIntersect(ray_, nearT, farT);
+            foundBoxes.push_back(std::pair<Node*, float>(node, farT));
         }
+		return;
     }
 
     return;
@@ -288,6 +288,15 @@ void sortFoundTriangles(std::vector<std::pair<uint32_t, float>>& triangles)
 
     return;
 }
+
+//bool findIntersectedTriangles
+//    (std::vector<std::pair<Node*, float>>& foundBoxes, const Ray3f& ray_, Mesh *mesh, 
+//        Intersection &its, bool shadowRay)
+//{
+//    for (int i = 0; i < foundBoxes.size(); i++) {
+//
+//    }
+//}
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const {
     bool foundIntersection = false;  // Was an intersection found so far?
@@ -324,7 +333,10 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
 
         //start = std::chrono::high_resolution_clock::now();                                    ////////////////////
 
-        sortFoundBoxes(foundBoxes);
+        if (foundBoxes.size() > 0)
+            sortFoundBoxes(foundBoxes);
+        else
+            return foundIntersection;
 
         //end = std::chrono::high_resolution_clock::now();
         //duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -334,19 +346,21 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
         uint32_t foundTriangle = -1;
         float foundTriangleDistance = INFINITY;
 
-        std::pair<Node*, float> foundBox;
+        //std::pair<Node*, float>* foundBox;
+        Node* nodeTemp;
 
         //start = std::chrono::high_resolution_clock::now();                                    ////////////////////
 
         for (int i = 0; i < foundBoxes.size(); i++) {//foundBoxesSize; i++) {
-            foundBox = foundBoxes[i];
+            //foundBox = &foundBoxes[i];
+            nodeTemp = foundBoxes[i].first;
             float u, v, t;
 
             uint32_t foundTriangleTemp;
             float foundTriangleDistanceTemp = foundTriangleDistance;
 
-            for (uint32_t i = 0; i < foundBox.first->localSize; i++) {
-                uint32_t idx = foundBox.first->triangleIdxs[i];
+            for (uint32_t j = 0; j < nodeTemp->localSize; j++) {
+                uint32_t idx = nodeTemp->triangleIdxs[j];
 
                 if (m_mesh->rayIntersect(idx, ray, u, v, t)) {
                     if (shadowRay)

@@ -33,29 +33,37 @@ public:
         Normal3f n = its.shFrame.n;
         Point3f p = its.p;
 
-        float hitValue;
+        float visible;
         Vector3f rayFromIntersectionDir;
-        Point2f sample;
+        int count = 0;
 
-        pcg32 rng;
-        Color3f result(0.0, 0.0, 0.0);
+        //pcg32 rng;
+        Vector3f result(0.0, 0.0, 0.0);
 
         for (int i = 0; i < MAX_SAMPLES; i++) {
-            sample = Point2f(rng.nextFloat(), rng.nextFloat());
-            rayFromIntersectionDir = Warp::squareToUniformSphere(sample);
-            rayFromIntersectionDir = (n.dot(Normal3f(0, 0, 1)) >= 0) ? rayFromIntersectionDir : -rayFromIntersectionDir;
-            Ray3f rayFromIntersection(p, rayFromIntersectionDir, 1e-4f, INFINITY);
+            rayFromIntersectionDir = Warp::squareToUniformSphere(sampler->next2D());
             float rayFromIntersectionDirProb = Warp::squareToUniformHemispherePdf(rayFromIntersectionDir);
-            hitValue = (scene->getAccel()->rayIntersect(rayFromIntersection, its, true)) ? 0.0 : 1.0;
-            if(rayFromIntersectionDirProb > 0)
-                result += hitValue * (std::fmax(0, n.dot(rayFromIntersectionDir)) / M_PI) / rayFromIntersectionDirProb;
+            //Vector3f rayFromIntersectionDirWorld = its.shFrame.toWorld(rayFromIntersectionDir).normalized();
+            //Ray3f rayFromIntersection(p + 1e-4f * rayFromIntersectionDirWorld, rayFromIntersectionDirWorld);
+            rayFromIntersectionDir = (n.dot(Normal3f(0, 0, 1)) >= 0) ? rayFromIntersectionDir : -rayFromIntersectionDir;
+            Ray3f rayFromIntersection(p + 1e-4f * rayFromIntersectionDir, rayFromIntersectionDir);
+            visible = (scene->getAccel()->rayIntersect(rayFromIntersection, its, true)) ? 0 : 1;
+            //float cosTheta = its.shFrame.cosTheta(rayFromIntersectionDir);
+            if (rayFromIntersectionDirProb != 0.0) {
+                result += Vector3f(visible) * std::fmax(0, n.dot(rayFromIntersectionDir)) / M_PI / rayFromIntersectionDirProb;
+                //result += Vector3f(visible) * cosTheta / M_PI / rayFromIntersectionDirProb;
+                count++;
+            }
         }
+        //
+        if(count > 0)
+            result /= float(count);
 
         //auto end = std::chrono::high_resolution_clock::now();
         //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         //printf("11111 Li %f => %lld us.\n", ray.o.x(), duration.count());
 
-        return result;
+        return Color3f(result.x(), result.y(), result.z());
     }
 
     std::string toString() const {
