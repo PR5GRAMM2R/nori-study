@@ -277,39 +277,60 @@ void Accel::build() {
 //    return {};
 //}
 
-std::vector<std::pair<Node*, float>>
-findIntersectedBoxes(Node* root, const Ray3f& ray_)
+//std::vector<std::pair<Node*, float>>
+//findIntersectedBoxes(Node* root, const Ray3f& ray_)
+//{
+//    std::vector<std::pair<Node*, float>> result;     // 최종 반환용
+//    if (!root) return result;
+//
+//    /* ---- ① DFS용 스택 준비 ---- */
+//    std::vector<Node*> stack;
+//    stack.push_back(root);
+//
+//    /* ---- ② 반복 순회 ---- */
+//    while (!stack.empty()) {
+//        Node* node = stack.back();
+//        stack.pop_back();
+//
+//        float nearT, farT;
+//        if (!node->box.rayIntersect(ray_, nearT, farT))
+//            continue;                                // 이 노드와 자식 모두 스킵
+//
+//        if (node->hasChild) {
+//            /* 내부 노드 ─ 자식들을 스택에 push */
+//            for (int i = 0; i < OCTREE_CHILDS; ++i) {
+//                if (node->child[i])
+//                    stack.push_back(node->child[i]);
+//            }
+//        }
+//        else {
+//            /* 리프 노드 ─ 삼각형이 있다면 결과에 추가 */
+//            if (node->localSize != 0)
+//                result.emplace_back(node, nearT);    // (Node*, 교차 거리)
+//        }
+//    }
+//    return result;
+//}
+
+void findIntersectedBoxes (Node* node, const Ray3f& ray_, std::vector<std::pair<Node*, float>>& foundBoxes)
 {
-    std::vector<std::pair<Node*, float>> result;     // 최종 반환용
-    if (!root) return result;
+    float nearT, farT;
 
-    /* ---- ① DFS용 스택 준비 ---- */
-    std::vector<Node*> stack;
-    stack.push_back(root);
-
-    /* ---- ② 반복 순회 ---- */
-    while (!stack.empty()) {
-        Node* node = stack.back();
-        stack.pop_back();
-
-        float nearT, farT;
-        if (!node->box.rayIntersect(ray_, nearT, farT))
-            continue;                                // 이 노드와 자식 모두 스킵
-
+    if (node->box.rayIntersect(ray_, nearT, farT)) {
         if (node->hasChild) {
-            /* 내부 노드 ─ 자식들을 스택에 push */
-            for (int i = 0; i < OCTREE_CHILDS; ++i) {
-                if (node->child[i])
-                    stack.push_back(node->child[i]);
+            for (int i = 0; i < OCTREE_CHILDS; i++) {
+                findIntersectedBoxes(node->child[i], ray_, foundBoxes);
             }
         }
         else {
-            /* 리프 노드 ─ 삼각형이 있다면 결과에 추가 */
             if (node->localSize != 0)
-                result.emplace_back(node, nearT);    // (Node*, 교차 거리)
+                foundBoxes.push_back(std::pair<Node*, float>(node, nearT));
+            else
+                return;
         }
     }
-    return result;
+
+    return;
 }
 
 void sortFoundBoxes(std::vector<std::pair<Node*, float>>& boxes)
@@ -355,7 +376,11 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     //}
 
     {
-        std::vector<std::pair<Node*, float>> foundBoxes = findIntersectedBoxes(octree.rootNode, ray);
+        //std::vector<std::pair<Node*, float>> foundBoxes = findIntersectedBoxes(octree.rootNode, ray);
+
+        std::vector<std::pair<Node*, float>> foundBoxes;
+
+        findIntersectedBoxes(octree.rootNode, ray, foundBoxes);
 
         sortFoundBoxes(foundBoxes);
 
