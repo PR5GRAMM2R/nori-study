@@ -55,7 +55,7 @@ public:
                 count++;
             }
         }
-
+        //
         if(count > 0)
             result /= float(count);
 
