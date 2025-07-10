@@ -3,17 +3,29 @@
 #include <nori/scene.h>
 #include <nori/warp.h>
 #include <pcg32.h>
+#include <chrono>
 
 NORI_NAMESPACE_BEGIN
 
-#define MAX_SAMPLES 25
+#define MAX_SAMPLES 10
 
 class AOIntegrator : public Integrator {
 public:
     AOIntegrator(const PropertyList& props) {
+        sample = new Point2f[MAX_SAMPLES];
+        rayFromIntersectionDir = new Vector3f[MAX_SAMPLES];
+        rayFromIntersectionDirProb = new float[MAX_SAMPLES];
+
+        for (int i = 0; i < MAX_SAMPLES; i++) {
+            sample[i] = Point2f(rng.nextFloat(), rng.nextFloat());
+            rayFromIntersectionDir[i] = Warp::squareToUniformSphere(sample[i]);
+            rayFromIntersectionDirProb[i] = Warp::squareToUniformSpherePdf(rayFromIntersectionDir[i]);
+        }
     }
 
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
+        //auto start = std::chrono::high_resolution_clock::now();                                    ////////////////////
+
         Intersection its;
         if (!scene->rayIntersect(ray, its))
             return Color3f(0.0f);
@@ -22,19 +34,23 @@ public:
         Point3f p = its.p;
 
         float hitValue;
-        Vector3f rayFromIntersectionDir;
-        Point2f sample;
+        //Vector3f rayFromIntersectionDir;
+        //Point2f sample;
 
-        pcg32 rng;
+        //pcg32 rng;
         Color3f result(0.0, 0.0, 0.0);
 
         for (int i = 0; i < MAX_SAMPLES; i++) {
-            sample = Point2f(rng.nextFloat(), rng.nextFloat());
-            rayFromIntersectionDir = Warp::squareToUniformSphere(sample);
-            Ray3f rayFromIntersection(p, rayFromIntersectionDir, 1e-4f, INFINITY);
+            //sample = Point2f(rng.nextFloat(), rng.nextFloat());
+            //rayFromIntersectionDir = Warp::squareToUniformSphere(sample);
+            Ray3f rayFromIntersection(p, rayFromIntersectionDir[i], 1e-4f, INFINITY);
             hitValue = (scene->getAccel()->rayIntersect(rayFromIntersection, its, true)) ? 0.0 : 1.0;
-            result += hitValue * (std::fmax(0, n.dot(rayFromIntersectionDir)) / M_PI);
+            result += hitValue * (std::fmax(0, n.dot(rayFromIntersectionDir[i])) / M_PI) / MAX_SAMPLES;
         }
+
+        //auto end = std::chrono::high_resolution_clock::now();
+        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        //printf("11111 Li %f => %lld us.\n", ray.o.x(), duration.count());
 
         return result;
     }
@@ -44,6 +60,10 @@ public:
     }
 
 protected:
+    pcg32 rng;
+    Point2f* sample;
+    Vector3f* rayFromIntersectionDir;
+    float* rayFromIntersectionDirProb;
 };
 
 NORI_REGISTER_CLASS(AOIntegrator, "ao");

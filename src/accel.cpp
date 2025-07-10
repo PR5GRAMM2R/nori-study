@@ -414,17 +414,31 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     //}
 
     {
+        auto start = std::chrono::high_resolution_clock::now();                                    ////////////////////
+
         //std::vector<std::pair<Node*, float>> foundBoxes = findIntersectedBoxes(octree.rootNode, ray);
 
         std::vector<std::pair<Node*, float>> foundBoxes;
         findIntersectedBoxes(octree.rootNode, ray, foundBoxes);
 
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        //if (ray.o.x() - -65.605499 > 1e-3f)
+            //printf("11111 findIntersectedBoxes %f => %lld us.\n", ray.o.x(), duration.count());
+
         //std::pair<Node*, float>* foundBoxes = new std::pair<Node*, float>[100];
         //uint16_t foundBoxesSize = 0;
         //findIntersectedBoxes(octree.rootNode, ray, foundBoxes, foundBoxesSize);
 
+        start = std::chrono::high_resolution_clock::now();                                    ////////////////////
+
         sortFoundBoxes(foundBoxes);
         //sortFoundBoxes(foundBoxes, foundBoxesSize);
+
+        end = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        //if (ray.o.x() - -65.605499 > 1e-6f)
+            //printf("22222 sortFoundBoxes %f => %lld us.\n", ray.o.x(), duration.count());
 
         /*std::vector<std::pair<uint32_t, float>> foundTriangles;
 
@@ -451,8 +465,10 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
 
         std::pair<Node*, float> foundBox;
 
-        for (auto foundBox : foundBoxes) {//int i = 0; i < foundBoxesSize; i++) {
-            //foundBox = foundBoxes[i];
+        start = std::chrono::high_resolution_clock::now();                                    ////////////////////
+
+        for (int i = 0; i < foundBoxes.size(); i++) {//foundBoxesSize; i++) {
+            foundBox = foundBoxes[i];
             float u, v, t;
 
             uint32_t foundTriangleTemp;
@@ -494,8 +510,15 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
             its.uv = Point2f(u, v);
             its.mesh = m_mesh;
             f = idx;
+
+            end = std::chrono::high_resolution_clock::now();
+            duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            //if (ray.o.x() - -65.605499 > 1e-6f)
+                //printf("33333 foundTriangle %f => %lld us.\n", ray.o.x(), duration.count());
         }
     }
+
+    auto start = std::chrono::high_resolution_clock::now();                                    ////////////////////
 
     if (foundIntersection) {
         /* At this point, we now know that there is an intersection,
@@ -549,6 +572,11 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
             its.shFrame = its.geoFrame;
         }
     }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    //if(ray.o.x() - -65.605499 > 1e-6f)
+        //printf("44444 foundIntersection %f => %lld us.\n", ray.o.x(), duration.count());
 
     return foundIntersection;
 }
