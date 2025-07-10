@@ -7,20 +7,20 @@
 
 NORI_NAMESPACE_BEGIN
 
-#define MAX_SAMPLES 25
+#define MAX_SAMPLES 10
 
 class AOIntegrator : public Integrator {
 public:
     AOIntegrator(const PropertyList& props) {
-        sample = new Point2f[MAX_SAMPLES];
+        /*sample = new Point2f[MAX_SAMPLES];
         rayFromIntersectionDir = new Vector3f[MAX_SAMPLES];
         rayFromIntersectionDirProb = new float[MAX_SAMPLES];
 
         for (int i = 0; i < MAX_SAMPLES; i++) {
             sample[i] = Point2f(rng.nextFloat(), rng.nextFloat());
-            rayFromIntersectionDir[i] = Warp::squareToUniformSphere(sample[i]);
-            rayFromIntersectionDirProb[i] = Warp::squareToUniformSpherePdf(rayFromIntersectionDir[i]);
-        }
+            rayFromIntersectionDir[i] = Warp::squareToCosineHemisphere(sample[i]);
+            rayFromIntersectionDirProb[i] = Warp::squareToCosineHemispherePdf(rayFromIntersectionDir[i]);
+        }*/
     }
 
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
@@ -34,18 +34,21 @@ public:
         Point3f p = its.p;
 
         float hitValue;
-        //Vector3f rayFromIntersectionDir;
-        //Point2f sample;
+        Vector3f rayFromIntersectionDir;
+        Point2f sample;
 
-        //pcg32 rng;
+        pcg32 rng;
         Color3f result(0.0, 0.0, 0.0);
 
         for (int i = 0; i < MAX_SAMPLES; i++) {
-            //sample = Point2f(rng.nextFloat(), rng.nextFloat());
-            //rayFromIntersectionDir = Warp::squareToUniformSphere(sample);
-            Ray3f rayFromIntersection(p, rayFromIntersectionDir[i], 1e-4f, INFINITY);
+            sample = Point2f(rng.nextFloat(), rng.nextFloat());
+            rayFromIntersectionDir = Warp::squareToUniformSphere(sample);
+            rayFromIntersectionDir = (n.dot(Normal3f(0, 0, 1)) >= 0) ? rayFromIntersectionDir : -rayFromIntersectionDir;
+            Ray3f rayFromIntersection(p, rayFromIntersectionDir, 1e-4f, INFINITY);
+            float rayFromIntersectionDirProb = Warp::squareToUniformHemispherePdf(rayFromIntersectionDir);
             hitValue = (scene->getAccel()->rayIntersect(rayFromIntersection, its, true)) ? 0.0 : 1.0;
-            result += hitValue * (std::fmax(0, n.dot(rayFromIntersectionDir[i])) / M_PI) / MAX_SAMPLES;
+            if(rayFromIntersectionDirProb > 0)
+                result += hitValue * (std::fmax(0, n.dot(rayFromIntersectionDir)) / M_PI) / rayFromIntersectionDirProb;
         }
 
         //auto end = std::chrono::high_resolution_clock::now();
@@ -60,11 +63,10 @@ public:
     }
 
 protected:
-    pcg32 rng;
+    /*pcg32 rng;
     Point2f* sample;
     Vector3f* rayFromIntersectionDir;
-    float* rayFromIntersectionDirProb;
-    Intersection its;
+    float* rayFromIntersectionDirProb;*/
 };
 
 NORI_REGISTER_CLASS(AOIntegrator, "ao");
