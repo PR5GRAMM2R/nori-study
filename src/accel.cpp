@@ -333,6 +333,34 @@ void findIntersectedBoxes (Node* node, const Ray3f& ray_, std::vector<std::pair<
     return;
 }
 
+//void findIntersectedBoxes
+//    (Node* node, const Ray3f& ray_, std::pair<Node*, float>*& foundBoxes, uint16_t& foundBoxesSize)
+//{
+//    float nearT, farT;
+//
+//    if (foundBoxesSize == 100)
+//        return;
+//
+//    if (node->box.rayIntersect(ray_, nearT, farT)) {
+//        if (node->hasChild) {
+//            for (int i = 0; i < OCTREE_CHILDS; i++) {
+//                findIntersectedBoxes(node->child[i], ray_, foundBoxes, foundBoxesSize);
+//            }
+//        }
+//        else {
+//            if (node->localSize != 0) {
+//                foundBoxes[foundBoxesSize].first = node;
+//                foundBoxes[foundBoxesSize].second = nearT;
+//                foundBoxesSize++;
+//            }
+//            else
+//                return;
+//        }
+//    }
+//
+//    return;
+//}
+
 void sortFoundBoxes(std::vector<std::pair<Node*, float>>& boxes)
 {
     std::sort(boxes.begin(), boxes.end(),
@@ -342,6 +370,16 @@ void sortFoundBoxes(std::vector<std::pair<Node*, float>>& boxes)
 
     return;
 }
+
+//void sortFoundBoxes(std::pair<Node*, float>* boxes, uint16_t foundBoxesSize)
+//{
+//    std::sort(boxes, boxes + foundBoxesSize,
+//        [](const std::pair<Node*, float>& a,
+//            const std::pair<Node*, float>& b)
+//        {
+//            return a.second < b.second;
+//        });
+//}
 
 void sortFoundTriangles(std::vector<std::pair<uint32_t, float>>& triangles)
 {
@@ -379,10 +417,14 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
         //std::vector<std::pair<Node*, float>> foundBoxes = findIntersectedBoxes(octree.rootNode, ray);
 
         std::vector<std::pair<Node*, float>> foundBoxes;
-
         findIntersectedBoxes(octree.rootNode, ray, foundBoxes);
 
+        //std::pair<Node*, float>* foundBoxes = new std::pair<Node*, float>[100];
+        //uint16_t foundBoxesSize = 0;
+        //findIntersectedBoxes(octree.rootNode, ray, foundBoxes, foundBoxesSize);
+
         sortFoundBoxes(foundBoxes);
+        //sortFoundBoxes(foundBoxes, foundBoxesSize);
 
         /*std::vector<std::pair<uint32_t, float>> foundTriangles;
 
@@ -407,7 +449,10 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
         uint32_t foundTriangle = -1;
         float foundTriangleDistance = INFINITY;
 
-        for (auto foundBox : foundBoxes) {
+        std::pair<Node*, float> foundBox;
+
+        for (auto foundBox : foundBoxes) {//int i = 0; i < foundBoxesSize; i++) {
+            //foundBox = foundBoxes[i];
             float u, v, t;
 
             uint32_t foundTriangleTemp;
