@@ -248,25 +248,70 @@ void Accel::build() {
     /* Nothing to do here for now */
 }
 
-void findIntersectedBoxes(Node* node, const Ray3f& ray_, std::vector<std::pair<Node*, float>>& foundBoxes, float nearT, float farT)
+void findIntersectedBoxes
+(Node* node, const Ray3f& ray_, std::vector<std::pair<Node*, float>>& foundBoxes)
 {
+    float nearT, farT;
+
     if (node->hasChild) {
         for (int i = 0; i < OCTREE_CHILDS; i++) {
-            if (node->child[i]->box.rayIntersect(ray_, nearT, farT))
-                findIntersectedBoxes(node->child[i], ray_, foundBoxes, nearT, farT);
+            if (node->child[i]->box.rayIntersect(ray_))
+                findIntersectedBoxes(node->child[i], ray_, foundBoxes);
         }
     }
     else {
         if (node->localSize != 0) {
-            //node->box.rayIntersect(ray_, nearT, farT);
-            //foundBoxes.push_back(std::pair<Node*, float>(node, farT));
-            foundBoxes.emplace_back(std::pair<Node*, float>(node, farT));
+            node->box.rayIntersect(ray_, nearT, farT);
+            foundBoxes.push_back(std::pair<Node*, float>(node, farT));
         }
         return;
     }
 
     return;
 }
+
+//void findIntersectedBoxes
+//    (Node* node, const Ray3f& ray_, std::vector<std::pair<Node*, float>>& foundBoxes, float nearT, float farT)
+//{
+//    if (node->hasChild) {
+//        for (int i = 0; i < OCTREE_CHILDS; i++) {
+//            if (node->child[i]->box.rayIntersect(ray_, nearT, farT))
+//                findIntersectedBoxes(node->child[i], ray_, foundBoxes, nearT, farT);
+//        }
+//    }
+//    else {
+//        if (node->localSize != 0) {
+//            foundBoxes.emplace_back(std::pair<Node*, float>(node, farT));
+//        }
+//        return;
+//    }
+//
+//    return;
+//}
+
+//void findIntersectedBoxes
+//    (Node* node, const Ray3f& ray_, std::pair<Node*, float>*& foundBoxes, int& foundBoxesSize, float nearT, float farT)
+//{
+//    if (foundBoxesSize > 100)
+//        return;
+//
+//    if (node->hasChild) {
+//        for (int i = 0; i < OCTREE_CHILDS; i++) {
+//            if (node->child[i]->box.rayIntersect(ray_, nearT, farT))
+//                findIntersectedBoxes(node->child[i], ray_, foundBoxes, foundBoxesSize, nearT, farT);
+//        }
+//    }
+//    else {
+//        if (node->localSize != 0) {
+//            foundBoxes[foundBoxesSize] = std::pair<Node*, float>(node, farT);
+//            foundBoxesSize++;
+//        }
+//        return;
+//    }
+//
+//    return;
+//}
+
 
 void sortFoundBoxes(std::vector<std::pair<Node*, float>>& boxes)
 {
@@ -322,9 +367,14 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     {
         //auto start = std::chrono::high_resolution_clock::now();                                    ////////////////////
 
-        float nearT, farT;
         std::vector<std::pair<Node*, float>> foundBoxes;
-        findIntersectedBoxes(octree.rootNode, ray, foundBoxes, nearT, farT);
+        findIntersectedBoxes(octree.rootNode, ray, foundBoxes);
+        float nearT, farT;
+        //findIntersectedBoxes(octree.rootNode, ray, foundBoxes, nearT, farT);
+
+        /*std::pair<Node*, float>* foundBoxes = new std::pair<Node*, float>[100];
+        int foundBoxesSize = 0;
+        findIntersectedBoxes(octree.rootNode, ray, foundBoxes, foundBoxesSize, nearT, farT);*/
 
         //auto end = std::chrono::high_resolution_clock::now();
         //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -337,6 +387,17 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
             sortFoundBoxes(foundBoxes);
         else
             return foundIntersection;
+
+        //if (foundBoxesSize > 0) {
+        //    std::sort(foundBoxes,                       // 시작 주소
+        //        foundBoxes + foundBoxesSize,      // 끝   주소(한 칸 뒤)
+        //        [](const std::pair<Node*, float>& a,
+        //            const std::pair<Node*, float>& b) {
+        //                return a.second < b.second; // 오름차순(nearT 가 작은 것부터)
+        //        });
+        //}
+        //else
+        //    return foundIntersection;
 
         //end = std::chrono::high_resolution_clock::now();
         //duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -351,7 +412,8 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
 
         //start = std::chrono::high_resolution_clock::now();                                    ////////////////////
 
-        for (int i = 0; i < foundBoxes.size(); i++) {//foundBoxesSize; i++) {
+        for (int i = 0; i < foundBoxes.size(); i++) {
+        //for (int i = 0; i < foundBoxesSize; i++) {
             //foundBox = &foundBoxes[i];
             nodeTemp = foundBoxes[i].first;
             float u, v, t;
