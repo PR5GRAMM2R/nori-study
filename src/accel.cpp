@@ -258,9 +258,9 @@ void findIntersectedBoxes(Node* node, const Ray3f& ray_, std::vector<std::pair<N
     }
     else {
         if (node->localSize != 0) {
-            //node->box.rayIntersect(ray_, nearT, farT);
-            //foundBoxes.push_back(std::pair<Node*, float>(node, farT));
-            foundBoxes.emplace_back(std::pair<Node*, float>(node, farT));
+            node->box.rayIntersect(ray_, nearT, farT);
+            foundBoxes.push_back(std::pair<Node*, float>(node, farT));
+            //foundBoxes.emplace_back(std::pair<Node*, float>(node, farT));
         }
         return;
     }
