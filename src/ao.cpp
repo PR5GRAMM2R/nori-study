@@ -43,15 +43,15 @@ public:
         for (int i = 0; i < MAX_SAMPLES; i++) {
             rayFromIntersectionDir = Warp::squareToUniformSphere(sampler->next2D());
             float rayFromIntersectionDirProb = Warp::squareToUniformHemispherePdf(rayFromIntersectionDir);
-            //Vector3f rayFromIntersectionDirWorld = its.shFrame.toWorld(rayFromIntersectionDir).normalized();
-            //Ray3f rayFromIntersection(p + 1e-4f * rayFromIntersectionDirWorld, rayFromIntersectionDirWorld);
-            rayFromIntersectionDir = (n.dot(Normal3f(0, 0, 1)) >= 0) ? rayFromIntersectionDir : -rayFromIntersectionDir;
-            Ray3f rayFromIntersection(p + 1e-4f * rayFromIntersectionDir, rayFromIntersectionDir);
+            Vector3f rayFromIntersectionDirWorld = its.shFrame.toWorld(rayFromIntersectionDir).normalized();
+            Ray3f rayFromIntersection(p + 1e-4f * rayFromIntersectionDirWorld, rayFromIntersectionDirWorld);
+            //rayFromIntersectionDir = (n.dot(Normal3f(0, 0, 1)) >= 0) ? rayFromIntersectionDir : -rayFromIntersectionDir;
+            //Ray3f rayFromIntersection(p + 1e-4f * rayFromIntersectionDir, rayFromIntersectionDir);
             visible = (scene->getAccel()->rayIntersect(rayFromIntersection, its, true)) ? 0 : 1;
-            //float cosTheta = its.shFrame.cosTheta(rayFromIntersectionDir);
+            float cosTheta = its.shFrame.cosTheta(rayFromIntersectionDir);
             if (rayFromIntersectionDirProb != 0.0) {
-                result += Vector3f(visible) * std::fmax(0, n.dot(rayFromIntersectionDir)) / M_PI / rayFromIntersectionDirProb;
-                //result += Vector3f(visible) * cosTheta / M_PI / rayFromIntersectionDirProb;
+                //result += Vector3f(visible) * std::fmax(0, n.dot(rayFromIntersectionDir)) / M_PI / rayFromIntersectionDirProb;
+                result += Vector3f(visible) * cosTheta / M_PI / rayFromIntersectionDirProb;
                 count++;
             }
         }
