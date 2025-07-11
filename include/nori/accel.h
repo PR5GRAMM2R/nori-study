@@ -43,6 +43,8 @@ public:
     int depth;
     int localSize = 0;
     int totalSize = 0;
+
+    int visitIdx;
 };
 
 class Octree {
