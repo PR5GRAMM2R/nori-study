@@ -32,12 +32,25 @@ Mesh::~Mesh() {
     delete m_emitter;
 }
 
+//void Mesh::activate() {
+//    if (!m_bsdf) {
+//        /* If no material was assigned, instantiate a diffuse BRDF */
+//        m_bsdf = static_cast<BSDF *>(
+//            NoriObjectFactory::createInstance("diffuse", PropertyList()));
+//    }
+//}
+
 void Mesh::activate() {
     if (!m_bsdf) {
         /* If no material was assigned, instantiate a diffuse BRDF */
-        m_bsdf = static_cast<BSDF *>(
+        m_bsdf = static_cast<BSDF*>(
             NoriObjectFactory::createInstance("diffuse", PropertyList()));
     }
+    m_PDF = DiscretePDF(getTriangleCount());
+    for (int i = 0; i < getTriangleCount(); i++) {
+        m_PDF.append(surfaceArea(i));
+    }
+    m_PDF.normalize();
 }
 
 float Mesh::surfaceArea(uint32_t index) const {
@@ -162,6 +175,46 @@ std::string Intersection::toString() const {
         indent(geoFrame.toString()),
         mesh ? mesh->toString() : std::string("null")
     );
+}
+
+// [ Sampling ]
+// 
+// 1. The sampled position p on the surface of the mesh.
+// 2. The interpolated surface normal n at p computed from the per-vertex normals.
+//      When the mesh does not provide per-vertex normals, compute and return the face normal instead.
+// 3. The probability density of the sample.
+//      This should be the reciprocal of the surface area of the entire mesh.
+//
+// Once a triangle is chosen, you can (uniformly) sample a barycentric coordinate
+//  (alpha, beta, 1 - alpha - beta) using the mapping :
+//      alpha = 1 - sqrt(1 - xi1)  
+//      beta = xi2 * sqrt(1 - xi1)
+//  where xi1 and xi2 are uniform variates in [0, 1).
+Point3f Mesh::sample(Sampler* sample) {
+    uint32_t index = m_PDF.sample(sample->next1D());
+
+    uint32_t i0 = m_F(0, index), i1 = m_F(1, index), i2 = m_F(2, index);
+    const Point3f p0 = m_V.col(i0), p1 = m_V.col(i1), p2 = m_V.col(i2);
+
+    return (i1 - i0) * sample->next1D() + (i2 - i0) * sample->next1D();
+}
+
+Normal3f Mesh::getFaceNormalMean(uint32_t index) {
+    uint32_t i0 = m_F(0, index), i1 = m_F(1, index), i2 = m_F(2, index);
+    Normal3f normal;
+
+    Point3f p0, p1, p2;
+    if (m_N.size() == 0) {
+        p0 = m_V.col(i0); p1 = m_V.col(i1); p2 = m_V.col(i2);
+        normal = (p1 - p0).cross(p2 - p0);
+        normal.normalize();
+        return normal;
+    }
+
+    p0 = m_N.col(i0), p1 = m_N.col(i1), p2 = m_N.col(i2);
+    normal = (p0 + p1 + p2) / 3.0;
+
+    return normal;
 }
 
 NORI_NAMESPACE_END
