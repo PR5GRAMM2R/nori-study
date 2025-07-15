@@ -10,6 +10,10 @@ public:
         m_radiance = props.getColor("radiance");
     }
 
+    Color3f AreaLight::getRadiance() const {
+        return m_radiance;
+    }
+
     std::string toString() const {
         return tfm::format(
             "Area Light[\n"

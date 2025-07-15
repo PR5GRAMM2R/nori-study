@@ -160,12 +160,14 @@ public:
     std::string toString() const;
 
     float getPDF() {
-        return m_PDF.getSum();
+        return m_pdf.getSum();
     }
 
-    Point3f sample(Sampler* sample);
+    float samplePosition(Sampler* sampler, Point3f& position, Normal3f& normal);
 
-    Normal3f getFaceNormalMean(uint32_t index);
+    Normal3f getFaceNormal(uint32_t index, Point2f& s);
+
+    float allSurfaceArea() const;
 
     /**
      * \brief Return the type of object (i.e. Mesh/BSDF/etc.)
@@ -187,8 +189,7 @@ protected:
     Emitter    *m_emitter = nullptr;     ///< Associated emitter, if any
     BoundingBox3f m_bbox;                ///< Bounding box of the mesh
 
-    DiscretePDF m_PDF;
-
+    DiscretePDF m_pdf;
 };
 
 NORI_NAMESPACE_END

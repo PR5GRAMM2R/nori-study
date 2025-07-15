@@ -49,7 +49,7 @@ public:
             Normal3f lightNormal;
             float lightPD = 1.0f / selectedLightMesh->allSurfaceArea();
             Point3f lightPoint;// = selectedLightMesh->sample(sampler, lightNormal, lightPD);
-            selectedLightMesh->samplePosition(sampler, lightPoint, lightNormal);
+            selectedLightMesh->sample(sampler, lightPoint, lightNormal);
 
             Normal3f dirToLight = lightPoint - p;
             float dirToLightDist = dirToLight.norm();

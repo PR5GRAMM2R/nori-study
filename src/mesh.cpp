@@ -46,11 +46,11 @@ void Mesh::activate() {
         m_bsdf = static_cast<BSDF*>(
             NoriObjectFactory::createInstance("diffuse", PropertyList()));
     }
-    m_PDF = DiscretePDF(getTriangleCount());
+    m_pdf = DiscretePDF(getTriangleCount());
     for (int i = 0; i < getTriangleCount(); i++) {
-        m_PDF.append(surfaceArea(i));
+        m_pdf.append(surfaceArea(i));
     }
-    m_PDF.normalize();
+    m_pdf.normalize();
 }
 
 float Mesh::surfaceArea(uint32_t index) const {
@@ -177,6 +177,7 @@ std::string Intersection::toString() const {
     );
 }
 
+
 // [ Sampling ]
 // 
 // 1. The sampled position p on the surface of the mesh.
@@ -190,16 +191,42 @@ std::string Intersection::toString() const {
 //      alpha = 1 - sqrt(1 - xi1)  
 //      beta = xi2 * sqrt(1 - xi1)
 //  where xi1 and xi2 are uniform variates in [0, 1).
-Point3f Mesh::sample(Sampler* sample) {
-    uint32_t index = m_PDF.sample(sample->next1D());
+float Mesh::samplePosition(Sampler* sampler, Point3f& position, Normal3f& normal) {
+    Point2f s = sampler->next2D();
+    uint32_t index = m_pdf.sample(s.x());
 
     uint32_t i0 = m_F(0, index), i1 = m_F(1, index), i2 = m_F(2, index);
     const Point3f p0 = m_V.col(i0), p1 = m_V.col(i1), p2 = m_V.col(i2);
 
-    return (i1 - i0) * sample->next1D() + (i2 - i0) * sample->next1D();
+    float r = std::sqrt(1 - s.x());
+    float a = 1 - r;
+    float b = s.y() * r;
+
+    normal = getFaceNormal(index, Point2f(a, b));
+    float pd = 1.0f / allSurfaceArea();
+
+    position = p0 * a + p1 * b + p2 * (1 - a - b);
+
+    return pd;
+    //return (i1 - i0) * sampler->next1D() + (i2 - i0) * sampler->next1D();
 }
 
-Normal3f Mesh::getFaceNormalMean(uint32_t index) {
+//float Mesh::samplePosition(const Point2f& sample, Point3f& position, Normal3f& normal)
+//{
+//    uint32_t index = m_pdf.sample(sample.x());
+//
+//    uint32_t i0 = m_F(0, index), i1 = m_F(1, index), i2 = m_F(2, index);
+//    const Point3f p0 = m_V.col(i0), p1 = m_V.col(i1), p2 = m_V.col(i2);
+//
+//    float r = std::sqrt(1 - sample.x());
+//    float a = 1 - r;
+//    float b = sample.y() * r;
+//
+//    normal = getFaceNormal(index, sample);
+//    float pd = 1.0f / allSurfaceArea();
+//}
+
+Normal3f Mesh::getFaceNormal(uint32_t index, Point2f& i) {
     uint32_t i0 = m_F(0, index), i1 = m_F(1, index), i2 = m_F(2, index);
     Normal3f normal;
 
@@ -212,9 +239,20 @@ Normal3f Mesh::getFaceNormalMean(uint32_t index) {
     }
 
     p0 = m_N.col(i0), p1 = m_N.col(i1), p2 = m_N.col(i2);
-    normal = (p0 + p1 + p2) / 3.0;
 
+    normal = i.x() * p0 + i.y() * p1 + (1 - i.x() - i.y()) * p2;
+    //normal.normalize();
     return normal;
+}
+
+float Mesh::allSurfaceArea() const
+{
+    float area = 0;
+
+    for (int idx = 0; idx < getTriangleCount(); idx++)
+        area += surfaceArea(idx);
+
+    return area;
 }
 
 NORI_NAMESPACE_END
