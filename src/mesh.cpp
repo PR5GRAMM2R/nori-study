@@ -193,7 +193,8 @@ std::string Intersection::toString() const {
 //  where xi1 and xi2 are uniform variates in [0, 1).
 float Mesh::samplePosition(Sampler* sampler, Point3f& position, Normal3f& normal) {
     Point2f s = sampler->next2D();
-    uint32_t index = m_pdf.sample(s.x());
+    //uint32_t index = m_pdf.sample((s.x() + s.y()) / 2.0);
+    uint32_t index = m_pdf.sample(sampler->next1D());
 
     uint32_t i0 = m_F(0, index), i1 = m_F(1, index), i2 = m_F(2, index);
     const Point3f p0 = m_V.col(i0), p1 = m_V.col(i1), p2 = m_V.col(i2);
@@ -240,8 +241,10 @@ Normal3f Mesh::getFaceNormal(uint32_t index, Point2f& i) {
 
     p0 = m_N.col(i0), p1 = m_N.col(i1), p2 = m_N.col(i2);
 
-    normal = i.x() * p0 + i.y() * p1 + (1 - i.x() - i.y()) * p2;
-    //normal.normalize();
+    //normal = i.x() * p0 + i.y() * p1 + (1 - i.x() - i.y()) * p2;
+    normal = p0 + i.x() * (p1 - p0) + i.y() * (p2 - p0);
+    normal.normalize();
+
     return normal;
 }
 
