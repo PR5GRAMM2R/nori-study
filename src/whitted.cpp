@@ -9,7 +9,7 @@
 
 NORI_NAMESPACE_BEGIN
 
-#define MAX_SAMPLES 3
+#define MAX_SAMPLES 10
 
 class WHITTEDIntegrator : public Integrator {
 public:
