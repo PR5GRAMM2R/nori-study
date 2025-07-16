@@ -9,7 +9,7 @@
 
 NORI_NAMESPACE_BEGIN
 
-#define MAX_SAMPLES 10
+#define MAX_SAMPLES 1
 
 class WHITTEDIntegrator : public Integrator {
 public:
@@ -40,40 +40,43 @@ public:
         Color3f result(0.0, 0.0, 0.0);
         
         int count = 0;
-        for(int i = 0; i < MAX_SAMPLES; i++)
+        for (int i = 0; i < MAX_SAMPLES; i++)
         {
-            Mesh* selectedLightMesh = lightMeshes[int(sampler->next1D() * (float)lightCount)];
+            //Mesh* selectedLightMesh = lightMeshes[int(sampler->next1D() * (float)lightCount)];
+            for (int l = 0; l < lightCount; l++) {
+                Mesh* selectedLightMesh = lightMeshes[l];
 
-            // 선택된 Light Mesh 에서 point, normal, pd 를 랜덤하게 뽑아오기
-            Normal3f lightNormal;
-            Point3f lightPoint;// = selectedLightMesh->sample(sampler, lightNormal, lightPD);
-            float lightPD = selectedLightMesh->samplePosition(sampler, lightPoint, lightNormal);
+                // 선택된 Light Mesh 에서 point, normal, pd 를 랜덤하게 뽑아오기
+                Normal3f lightNormal;
+                Point3f lightPoint;// = selectedLightMesh->sample(sampler, lightNormal, lightPD);
+                float lightPD = selectedLightMesh->samplePosition(sampler, lightPoint, lightNormal);
 
-            Normal3f dirFromLight = p - lightPoint;
-            float dirToLightDist = dirFromLight.norm();
-            dirFromLight = dirFromLight.normalized();
+                Normal3f dirFromLight = p - lightPoint;
+                float dirToLightDist = dirFromLight.norm();
+                dirFromLight = dirFromLight.normalized();
 
-            Intersection lightIts;
-            Ray3f rayFromIntersection(lightPoint, dirFromLight, 1e-4f, dirToLightDist - 1e-4f);
-            float visible = (scene->getAccel()->rayIntersect(rayFromIntersection, lightIts, true)) ? 0.0 : 1.0;
+                Intersection lightIts;
+                Ray3f rayFromIntersection(lightPoint, dirFromLight, 1e-4f, dirToLightDist - 1e-4f);
+                float visible = (scene->getAccel()->rayIntersect(rayFromIntersection, lightIts, true)) ? 0.0 : 1.0;
 
-            float geometry = visible * (std::fmax(0, n.dot(-dirFromLight)) * std::fmax(0, lightNormal.dot(dirFromLight)) / std::pow(dirToLightDist, 2));
+                float geometry = visible * (std::fmax(0, n.dot(-dirFromLight)) * std::fmax(0, lightNormal.dot(dirFromLight)) / std::pow(dirToLightDist, 2));
 
-            BSDFQueryRecord bsdfQueryRecord(its.toLocal(-dirFromLight), its.toLocal(-ray.d), ESolidAngle);
-            Color3f bsdf = its.mesh->getBSDF()->eval(bsdfQueryRecord);
+                BSDFQueryRecord bsdfQueryRecord(its.toLocal(-dirFromLight), its.toLocal(-ray.d), ESolidAngle);
+                Color3f bsdf = its.mesh->getBSDF()->eval(bsdfQueryRecord);
 
-            if (lightPD != 0) {
-                result += bsdf * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
-                count++;
+                if (lightPD != 0) {
+                    result += bsdf * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
+                    count++;
+                }
             }
         }
+
+        count /= lightCount;
 
         if (count > 0)
             result /= float(count);
         else
             result = Color3f(0.0f);
-
-        //printf("(%f , %f , %f) \n", result.x(), result.y(), result.z());
 
         if (its.mesh->isEmitter())
             return its.mesh->getEmitter()->getRadiance() + result;
