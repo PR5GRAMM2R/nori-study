@@ -42,12 +42,45 @@ public:
         return 0.0f;
     }
 
-    Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) const {
+    Color3f sample(BSDFQueryRecord& bRec, const Point2f& sample) const {
+        Vector3f normal = Vector3f(0, 0, 1);
+        float reflectivity;
+        float inN = m_intIOR;
+        float outN = m_extIOR;
+        float cosine;
+
+        //When Light comes from inside
+        if (bRec.wi.dot(normal) < 0) {
+            normal = -normal;
+        }
+        else
+        {
+            std::swap(inN, outN);
+        }
+
+        reflectivity = fresnel(bRec.wi.normalized().dot(normal), outN, inN);
+        float ioN = inN / outN;
+
+        bRec.eta = 1.f;
+
+        if (sample.x() > reflectivity) {
+            reflection(-bRec.wi.normalized(), normal, bRec.wo);
+
+            return Color3f(1.0);// *reflectivity;
+        }
+        else {
+            refraction(-bRec.wi.normalized(), normal, ioN, bRec.wo);
+
+            return Color3f(1.0);// *(1 - reflectivity);
+        }
+    }
+
+    /*Color3f sample(BSDFQueryRecord& bRec, const Point2f& sample) const {
         Vector3f normal = Vector3f(0, 0, 1);
         Vector3f lightIn = -bRec.wi; lightIn.normalize();
-        float reflectivity;
-        float iN = m_intIOR;
-        float oN = m_extIOR;
+        float reflectivity = 0.01;
+        float ni = m_intIOR;
+        float np = m_extIOR;
         float cosine;
 
         //When Light comes from inside
@@ -56,35 +89,27 @@ public:
         }
         else
         {
-            std::swap(iN, oN);
+            std::swap(ni, np);
         }
 
-        reflectivity = fresnel(-lightIn.dot(normal), oN, iN);
-        float ioN = iN / oN;
+        reflectivity = fresnel(-lightIn.dot(normal), np, ni);
 
-        if (reflectivity >= 1.0) {
-            bRec.wo = Vector3f(
-                -bRec.wi.x(),
-                -bRec.wi.y(),
-                bRec.wi.z()
-            );
+        reflectivity = (1 - ni / np) / (1 + ni / np);
+        reflectivity = reflectivity * reflectivity;
+        cosine = -lightIn.dot(normal);
+        reflectivity += (1 - reflectivity) * pow((1 - cosine), 5);
 
-            bRec.eta = 1.f;
+        if (!refraction(lightIn, normal, ni / np, bRec.wo))
+            reflectivity = 1;
 
-            return Color3f(1.f);
-        }
-
-        if (sample[0] > reflectivity) {
-            refraction(bRec.wi, normal, ioN, bRec.wo);
-        }
-        else {
-            reflection(bRec.wi, normal, bRec.wo);
+        if (sample[0] < reflectivity) {
+            reflection(lightIn, normal, bRec.wo);
         }
 
         bRec.eta = 1.f;
 
         return Color3f(1.f);
-    }
+    }*/
 
     std::string toString() const {
         return tfm::format(
