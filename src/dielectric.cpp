@@ -44,43 +44,10 @@ public:
 
     Color3f sample(BSDFQueryRecord& bRec, const Point2f& sample) const {
         Vector3f normal = Vector3f(0, 0, 1);
+        Vector3f lightIn = -bRec.wi; lightIn.normalize();
         float reflectivity;
         float inN = m_intIOR;
         float outN = m_extIOR;
-        float cosine;
-
-        //When Light comes from inside
-        if (bRec.wi.dot(normal) < 0) {
-            normal = -normal;
-        }
-        else
-        {
-            std::swap(inN, outN);
-        }
-
-        reflectivity = fresnel(bRec.wi.normalized().dot(normal), outN, inN);
-        float ioN = inN / outN;
-
-        bRec.eta = 1.f;
-
-        if (sample.x() > reflectivity) {
-            reflection(-bRec.wi.normalized(), normal, bRec.wo);
-
-            return Color3f(1.0);// *reflectivity;
-        }
-        else {
-            refraction(-bRec.wi.normalized(), normal, ioN, bRec.wo);
-
-            return Color3f(1.0);// *(1 - reflectivity);
-        }
-    }
-
-    /*Color3f sample(BSDFQueryRecord& bRec, const Point2f& sample) const {
-        Vector3f normal = Vector3f(0, 0, 1);
-        Vector3f lightIn = -bRec.wi; lightIn.normalize();
-        float reflectivity = 0.01;
-        float ni = m_intIOR;
-        float np = m_extIOR;
         float cosine;
 
         //When Light comes from inside
@@ -89,18 +56,15 @@ public:
         }
         else
         {
-            std::swap(ni, np);
+            std::swap(inN, outN);
         }
 
-        reflectivity = fresnel(-lightIn.dot(normal), np, ni);
+        reflectivity = fresnel(lightIn.dot(normal), outN, inN);
+        float ioN = inN / outN;
 
-        reflectivity = (1 - ni / np) / (1 + ni / np);
-        reflectivity = reflectivity * reflectivity;
-        cosine = -lightIn.dot(normal);
-        reflectivity += (1 - reflectivity) * pow((1 - cosine), 5);
-
-        if (!refraction(lightIn, normal, ni / np, bRec.wo))
+        if (!refraction(lightIn, normal, ioN, bRec.wo)) {
             reflectivity = 1;
+        }
 
         if (sample[0] < reflectivity) {
             reflection(lightIn, normal, bRec.wo);
@@ -109,7 +73,7 @@ public:
         bRec.eta = 1.f;
 
         return Color3f(1.f);
-    }*/
+    }
 
     std::string toString() const {
         return tfm::format(

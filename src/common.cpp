@@ -301,30 +301,25 @@ float fresnel(float cosThetaI, float extIOR, float intIOR) {
 
 void reflection(const Vector3f& iRay, const Vector3f& n, Vector3f& oRay)
 {
-    oRay = 2.0 * (iRay + iRay.dot(n) * n);
+    //oRay = 2.0 * (iRay + iRay.dot(n) * n);
+
+    oRay = iRay - 2.0f * iRay.dot(n) * n;
 }
 
-void refraction(const Vector3f& iRay, const Vector3f& n, const float& ioN, Vector3f& oRay)
+bool refraction(const Vector3f& iRay, const Vector3f& n, const float& ioN, Vector3f& oRay)
 {
-    oRay = std::sqrt(1 - std::pow(ioN, 2) * (1 - std::pow(iRay.dot(n), 2))) * -n + ioN * (iRay + iRay.dot(n) * n);
-}
+    //oRay = std::sqrt(1 - std::pow(ioN, 2) * (1 - std::pow(iRay.dot(n), 2))) * -n + ioN * (iRay + iRay.dot(n) * n);
 
-//bool reflection(const Vector3f& p, const Vector3f& n, Vector3f& result) {
-//    result = p - 2.f * n.dot(p) * n;
-//    return true;
-//}
-//
-//bool refraction(const Vector3f& p, const Vector3f& n, float ninp, Vector3f& result) {
-//    Vector3f np = p;
-//    np.normalize();
-//    float dt = np.dot(n);
-//    float isRefracted = 1.f - ninp * ninp * (1 - dt * dt);
-//    if (isRefracted < 0)
-//        return false;
-//    else {
-//        result = ninp * (np - n * dt) - n * sqrt(isRefracted);
-//        return true;
-//    }
-//}
+    float cosThetaI = -iRay.dot(n);
+    float sin2ThetaT = ioN * ioN * (1.0f - cosThetaI * cosThetaI);
+
+    // 전반사 조건
+    if (sin2ThetaT > 1.0f)
+        return false;
+
+    float cosThetaT = std::sqrt(1.0f - sin2ThetaT);
+    oRay = ioN * iRay + (ioN * cosThetaI - cosThetaT) * n;
+    return true;
+}
 
 NORI_NAMESPACE_END

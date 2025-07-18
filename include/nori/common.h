@@ -259,11 +259,7 @@ extern float fresnel(float cosThetaI, float extIOR, float intIOR);
 
 extern void reflection(const Vector3f& iRay, const Vector3f& n, Vector3f& oRay);
 
-extern void refraction(const Vector3f& iRay, const Vector3f& n, const float& ioN, Vector3f& oRay);
-
-//extern bool reflection(const Vector3f& p, const Vector3f& n, Vector3f& result);
-
-//extern bool refraction(const Vector3f& p, const Vector3f& n, float ninp, Vector3f& result);
+extern bool refraction(const Vector3f& iRay, const Vector3f& n, const float& ioN, Vector3f& oRay);
 
 /**
  * \brief Return the global file resolver instance
