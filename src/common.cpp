@@ -301,15 +301,11 @@ float fresnel(float cosThetaI, float extIOR, float intIOR) {
 
 void reflection(const Vector3f& iRay, const Vector3f& n, Vector3f& oRay)
 {
-    //oRay = 2.0 * (iRay + iRay.dot(n) * n);
-
     oRay = iRay - 2.0f * iRay.dot(n) * n;
 }
 
 bool refraction(const Vector3f& iRay, const Vector3f& n, const float& ioN, Vector3f& oRay)
 {
-    //oRay = std::sqrt(1 - std::pow(ioN, 2) * (1 - std::pow(iRay.dot(n), 2))) * -n + ioN * (iRay + iRay.dot(n) * n);
-
     float cosThetaI = -iRay.dot(n);
     float sin2ThetaT = ioN * ioN * (1.0f - cosThetaI * cosThetaI);
 

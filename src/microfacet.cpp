@@ -20,6 +20,9 @@
 #include <nori/frame.h>
 #include <nori/warp.h>
 
+#include <nori/dpdf.h>
+#include <random>
+
 NORI_NAMESPACE_BEGIN
 
 class Microfacet : public BSDF {
@@ -50,6 +53,11 @@ public:
 
     /// Evaluate the BRDF for the given pair of directions
     Color3f eval(const BSDFQueryRecord &bRec) const {
+        if (bRec.measure != ESolidAngle
+            || Frame::cosTheta(bRec.wi) <= 0
+            || Frame::cosTheta(bRec.wo) <= 0)
+            return 0.0f;
+
         Vector3f iRay = bRec.wi.normalized();
         Vector3f oRay = bRec.wo.normalized();
         Vector3f hRay = (iRay + oRay).normalized();
@@ -94,19 +102,22 @@ public:
         Vector3f iRay = bRec.wi.normalized();
         Vector3f oRay = bRec.wo.normalized();
         Vector3f hRay = (iRay + oRay).normalized();
-        Vector3f n = Vector3f(0, 0, 1);
+        //Vector3f n = Vector3f(0, 0, 1);
         float alpha = m_alpha;
         float ks = m_ks;
 
-        float thetaH = std::acos(hRay.dot(n));
-        float D = (0.5 * INV_PI) * (2 * std::exp(-std::pow(std::tan(thetaH), 2)) / std::pow(alpha, 2))
-            / (std::pow(alpha, 2) * std::pow(std::cos(thetaH), 3));
+        float cosThetaO = Frame::cosTheta(oRay);
 
-        float J = 1.0 / (4 * hRay.dot(oRay));
+        if (cosThetaO <= 0.f)
+            return 0.f;
 
-        float thetaO = std::acos(oRay.dot(n));
+        //float thetaH = std::acos(hRay.dot(n));
+        float D = (0.5 * INV_PI) * (2 * std::exp(-std::pow(Frame::tanTheta(hRay), 2) / std::pow(alpha, 2)))
+            / std::fmax(1e-6f, (std::pow(alpha, 2) * std::pow(Frame::cosTheta(hRay), 3)));
 
-        float _pdf = ks * D * J + (1.0 - ks) * (std::cos(thetaO) / M_PI);
+        float J = 1.0 / (4 * std::fmax(1e-6f, (hRay.dot(oRay))));
+
+        float _pdf = ks * D * J + (1.0 - ks) * (cosThetaO / M_PI);
 
         return _pdf;
     }
@@ -116,26 +127,38 @@ public:
         float alpha = m_alpha;
         bool isSpecular = true;
 
-        if (_sample[0] > m_ks)
-            isSpecular = false;
+        Point2f __sample;
 
         // Sample Reusing ÇÊ¿äÇÔ
+        if (_sample[0] >= m_ks) {
+            isSpecular = false;
+            __sample.x() = (_sample.x() - m_ks) / (1 - m_ks);
+        }
+        else {
+            __sample.x() = _sample.x() / m_ks;
+        }
+        __sample.y() = _sample.y();
 
-        if (!isSpecular) {    // Diffuse
+        if (!isSpecular) {          // Diffuse
             if (Frame::cosTheta(bRec.wi) <= 0)
                 return Color3f(0.0f);
 
             bRec.measure = ESolidAngle;
-            bRec.wo = Warp::squareToCosineHemisphere(_sample);
+            bRec.wo = Warp::squareToCosineHemisphere(__sample);
             bRec.eta = 1.0f;
             return m_kd;
         }
         else {                      // Specular
-            Vector3f n = Warp::squareToBeckmann(_sample, alpha);
+            Vector3f n = Warp::squareToBeckmann(__sample, alpha);
 
             reflection(-(bRec.wi), n, bRec.wo);
 
+            bRec.measure = ESolidAngle;
             bRec.eta = 1.f;
+
+            float _pdf = pdf(bRec);
+            if (_pdf <= 0)   return Color3f(0.f);
+
             return eval(bRec) * bRec.wo.dot(n) / pdf(bRec);
         }
 

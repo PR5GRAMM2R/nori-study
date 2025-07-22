@@ -68,7 +68,8 @@ public:
      *         when this is appropriate. A zero value means that sampling
      *         failed.
      */
-    virtual Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) const = 0;
+    //virtual Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) = 0;
+    virtual Color3f sample(BSDFQueryRecord& bRec, const Point2f& sample) const = 0;
 
     /**
      * \brief Evaluate the BSDF for a pair of directions and measure
