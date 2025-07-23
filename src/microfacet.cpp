@@ -141,7 +141,8 @@ public:
         }
 
         Color3f _eval = eval(bRec);
-        if (_eval.x() == 0 && _eval.y() == 0 && _eval.z() == 0)
+
+        if (_eval.x() <= 0 && _eval.y() <= 0 && _eval.z() <= 0)
             return Color3f(0.f);
 
         return _eval * Frame::cosTheta(bRec.wo) / pdf(bRec);
