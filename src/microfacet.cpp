@@ -20,9 +20,6 @@
 #include <nori/frame.h>
 #include <nori/warp.h>
 
-#include <nori/dpdf.h>
-#include <random>
-
 NORI_NAMESPACE_BEGIN
 
 class Microfacet : public BSDF {
@@ -69,22 +66,17 @@ public:
         Color3f kd = m_kd;
         float ks = m_ks;
 
-        float thetaH = std::acos(hRay.dot(n));
-        float D = (0.5 * INV_PI) * (2 * std::exp(-std::pow(std::tan(thetaH), 2)) / std::pow(alpha, 2)) 
-            / (std::pow(alpha, 2) * std::pow(std::cos(thetaH), 3));
+        float D = Warp::squareToBeckmannPdf(hRay, alpha);
 
-        float F = fresnel(iRay.dot(hRay), outN, inN);
+        float F = fresnel(hRay.dot(iRay), outN, inN);
 
-        float thetaI = std::acos(iRay.dot(n));
-        float thetaO = std::acos(oRay.dot(n));
-
-        float bi = 1.0 / (alpha * std::tan(thetaI));
+        float bi = 1.0 / (alpha * Frame::tanTheta(iRay));
         float ci = iRay.dot(hRay) / iRay.dot(n);
         float Xi = (ci > 0) ? 1 : 0;
         float tempI = (bi < 1.6) ? ((3.535 * bi + 2.181 * std::pow(bi, 2)) / (1 + 2.276 * bi + 2.577 * std::pow(bi, 2))) : 1;
         float Gi = Xi * tempI;
 
-        float bo = 1.0 / (alpha * std::tan(thetaO));
+        float bo = 1.0 / (alpha * Frame::tanTheta(oRay));
         float co = oRay.dot(hRay) / oRay.dot(n);
         float Xo = (co > 0) ? 1 : 0;
         float tempO = (bo < 1.6) ? ((3.535 * bo + 2.181 * std::pow(bo, 2)) / (1 + 2.276 * bo + 2.577 * std::pow(bo, 2))) : 1;
@@ -92,7 +84,7 @@ public:
 
         float G = Gi * Go;
 
-        Color3f f = (kd * INV_PI) + ks * (D * F * G / (4 * std::cos(thetaI) * std::cos(thetaO) * std::cos(thetaH))) * Color3f(1.0f);
+        Color3f f = (kd * INV_PI) + ks * (D * F * G / (4 * Frame::cosTheta(iRay) * Frame::cosTheta(oRay) * Frame::cosTheta(hRay))) * Color3f(1.0f);
 
         return f;
     }
@@ -102,16 +94,15 @@ public:
         Vector3f iRay = bRec.wi.normalized();
         Vector3f oRay = bRec.wo.normalized();
         Vector3f hRay = (iRay + oRay).normalized();
-        //Vector3f n = Vector3f(0, 0, 1);
         float alpha = m_alpha;
         float ks = m_ks;
 
+        float cosThetaI = Frame::cosTheta(iRay);
         float cosThetaO = Frame::cosTheta(oRay);
 
-        if (cosThetaO <= 0.f)
+        if (cosThetaI <= 0.f || cosThetaO <= 0.f)
             return 0.f;
 
-        //float thetaH = std::acos(hRay.dot(n));
         float D = (0.5 * INV_PI) * (2 * std::exp(-std::pow(Frame::tanTheta(hRay), 2) / std::pow(alpha, 2)))
             / std::fmax(1e-6f, (std::pow(alpha, 2) * std::pow(Frame::cosTheta(hRay), 3)));
 
@@ -139,28 +130,21 @@ public:
         }
         __sample.y() = _sample.y();
 
-        if (!isSpecular) {          // Diffuse
-            if (Frame::cosTheta(bRec.wi) <= 0)
-                return Color3f(0.0f);
+        bRec.measure = ESolidAngle;
 
-            bRec.measure = ESolidAngle;
+        if (!isSpecular) {          // Diffuse
             bRec.wo = Warp::squareToCosineHemisphere(__sample);
-            bRec.eta = 1.0f;
-            return m_kd;
         }
         else {                      // Specular
             Vector3f n = Warp::squareToBeckmann(__sample, alpha);
-
-            reflection(-(bRec.wi), n, bRec.wo);
-
-            bRec.measure = ESolidAngle;
-            bRec.eta = 1.f;
-
-            float _pdf = pdf(bRec);
-            if (_pdf <= 0)   return Color3f(0.f);
-
-            return eval(bRec) * bRec.wo.dot(n) / pdf(bRec);
+            reflection(-bRec.wi, n, bRec.wo);
         }
+
+        Color3f _eval = eval(bRec);
+        if (_eval.x() == 0 && _eval.y() == 0 && _eval.z() == 0)
+            return Color3f(0.f);
+
+        return _eval * Frame::cosTheta(bRec.wo) / pdf(bRec);
 
         // Note: Once you have implemented the part that computes the scattered
         // direction, the last part of this function should simply return the

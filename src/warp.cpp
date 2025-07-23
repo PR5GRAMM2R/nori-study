@@ -141,12 +141,6 @@ Vector3f Warp::squareToBeckmann(const Point2f &sample, float alpha) {
 
 float Warp::squareToBeckmannPdf(const Vector3f &m, float alpha) {
     //throw NoriException("Warp::squareToBeckmannPdf() is not yet implemented!");
-    /*float theta = std::acos(m.z());
-
-    return (1.0 / (2.0 * M_PI)) * 
-        2.0 * std::exp(-std::pow(std::tan(theta), 2) / std::pow(alpha, 2)) /
-        std::fmax(1e-6f, std::pow(alpha, 2) * std::pow(std::cos(theta), 3));*/
-
     return (0.5 * INV_PI) * (2 * std::exp(-std::pow(Frame::tanTheta(m), 2) / std::pow(alpha, 2)))
         / std::fmax(1e-6f, (std::pow(alpha, 2) * std::pow(Frame::cosTheta(m), 3)));
 }
