@@ -78,6 +78,11 @@ public:
     std::string toString() const {
         return tfm::format("[%f, %f, %f]", coeff(0), coeff(1), coeff(2));
     }
+
+    float maxComponent() {
+        float temp = (r() > g()) ? r() : g();
+        return (temp > b()) ? temp : b();
+    }
 };
 
 /**

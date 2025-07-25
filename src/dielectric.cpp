@@ -68,7 +68,12 @@ public:
 
         if (sample[0] < reflectivity) {
             reflection(lightIn, normal, bRec.wo);
+
+            //bRec.eta = 1.f; //////////
         }
+        //else {
+        //    bRec.eta = ioN; //////////
+        //}
 
         bRec.eta = 1.f;
 

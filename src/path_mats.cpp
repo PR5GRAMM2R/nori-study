@@ -11,105 +11,69 @@ NORI_NAMESPACE_BEGIN
 
 #define MAX_SAMPLES 10
 
-class WHITTEDIntegrator : public Integrator {
+class PATHMATSIntegrator : public Integrator {
 public:
-    WHITTEDIntegrator(const PropertyList& props) {
+    PATHMATSIntegrator(const PropertyList& props) {
     }
 
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
-        Intersection its;
-        if (!scene->rayIntersect(ray, its))
-            return Color3f(0.0f);
+        Color3f result(0.0, 0.0, 0.0);
+        Color3f throughput(1.0, 1.0, 1.0);
+        float productedEta = 1.0f;
+        Ray3f currentRay = ray;
 
-        Normal3f n = its.shFrame.n;
-        Point3f p = its.p;
+        int rayBounceCount = 0;
+        while (true) {
+            Intersection its;
+            bool hit = scene->rayIntersect(currentRay, its);
 
-        if (its.mesh->getBSDF()->isDiffuse()) {
-            std::vector<Mesh*> meshes = scene->getMeshes();
-            Mesh** lightMeshes = new Mesh * [meshes.size()];
-
-            int lightCount = 0;
-            for (Mesh* mesh : meshes) {
-                if (mesh->isEmitter()) {
-                    lightMeshes[lightCount++] = mesh;
-                }
+            if (!hit) {
+                break;
             }
 
-            if (lightCount == 0)
-                return Color3f(0.0f);
-
-            Color3f result(0.0, 0.0, 0.0);
-
-            int count = 0;
-            for (int i = 0; i < MAX_SAMPLES; i++)
-            {
-                //Mesh* selectedLightMesh = lightMeshes[int(sampler->next1D() * (float)lightCount)];
-                for (int l = 0; l < lightCount; l++) {
-                    Mesh* selectedLightMesh = lightMeshes[l];
-
-                    // 선택된 Light Mesh 에서 point, normal, pd 를 랜덤하게 뽑아오기
-                    Normal3f lightNormal;
-                    Point3f lightPoint;// = selectedLightMesh->sample(sampler, lightNormal, lightPD);
-                    float lightPD = selectedLightMesh->samplePosition(sampler, lightPoint, lightNormal);
-
-                    Normal3f dirFromLight = p - lightPoint;
-                    float dirToLightDist = dirFromLight.norm();
-                    dirFromLight = dirFromLight.normalized();
-
-                    Intersection lightIts;
-                    Ray3f rayFromIntersection(lightPoint, dirFromLight, 1e-4f, dirToLightDist - 1e-4f);
-                    float visible = (scene->getAccel()->rayIntersect(rayFromIntersection, lightIts, true)) ? 0.0 : 1.0;
-
-                    float geometry = visible * (std::fmax(0, n.dot(-dirFromLight)) * std::fmax(0, lightNormal.dot(dirFromLight)) / std::pow(dirToLightDist, 2));
-
-                    BSDFQueryRecord bsdfQueryRecord(its.toLocal(-dirFromLight), its.toLocal(-ray.d), ESolidAngle);
-                    Color3f bsdf = its.mesh->getBSDF()->eval(bsdfQueryRecord);
-
-                    if (lightPD != 0) {
-                        result += bsdf * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
-                        count++;
-                    }
-                }
+            if (its.mesh->isEmitter()) {
+                result += throughput * its.mesh->getEmitter()->getRadiance();
             }
 
-            count /= lightCount;
+            const BSDF* bsdf = its.mesh->getBSDF();
+            if (!bsdf) break;
 
-            if (count > 0)
-                result /= float(count);
-            else
-                result = Color3f(0.0f);
+            BSDFQueryRecord bRec(its.toLocal(-currentRay.d));
+            Point2f sample = sampler->next2D();
+            Color3f f = bsdf->sample(bRec, sample);
+            if (f.isZero())
+                break;
 
-            if (its.mesh->isEmitter())
-                return its.mesh->getEmitter()->getRadiance() + result;
-            else
-                return result;
+            float cosTheta = std::abs(Frame::cosTheta(bRec.wo));
+            float pdf = bsdf->pdf(bRec);
+            if (pdf == 0.f || f.isZero())
+                break;
+            throughput *= f * cosTheta / pdf;
+
+            productedEta *= bRec.eta;
+
+            if (rayBounceCount >= 3) {
+                float pCont = std::min(throughput.maxComponent() * productedEta * productedEta, 0.99f);
+                if (sampler->next1D() > pCont)
+                    break;
+                throughput /= pCont;
+            }
+
+            Vector3f wo_world = its.toWorld(bRec.wo);
+            currentRay = Ray3f(its.p, wo_world);
+
+            rayBounceCount++;
         }
-        else {
-            Vector2f sample = sampler->next2D();
 
-            BSDFQueryRecord bsdfQueryRecord(its.toLocal(-ray.d));
-            Color3f c = its.mesh->getBSDF()->sample(bsdfQueryRecord, sample);
-
-            Vector3f oRay = its.toWorld(bsdfQueryRecord.wo);
-            Color3f li;
-
-            if (sampler->next1D() < 0.95) {
-                li = (1.0 / 0.95) * c * Li(scene, sampler, Ray3f(p + 1e-4f * oRay, oRay));
-            }
-            else {
-                li = Color3f(0.0);
-            }
-
-            return li;
-        }
+        return result;
     }
 
     std::string toString() const {
-        return "WHITTEDIntegrator[]";
+        return "PATHMATSIntegrator[]";
     }
 
 protected:
 };
 
-NORI_REGISTER_CLASS(WHITTEDIntegrator, "whitted");
+NORI_REGISTER_CLASS(PATHMATSIntegrator, "path_mats");
 NORI_NAMESPACE_END
