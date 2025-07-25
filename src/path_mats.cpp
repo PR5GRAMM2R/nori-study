@@ -16,53 +16,93 @@ public:
     PATHMATSIntegrator(const PropertyList& props) {
     }
 
+    // Recursive
+    /*
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
-        Color3f result(0.0, 0.0, 0.0);
-        Color3f throughput(1.0, 1.0, 1.0);
-        float productedEta = 1.0f;
-        Ray3f currentRay = ray;
+        float continueProb = 0.99;
+        Color3f throughput = Color3f(1.f);
 
-        int rayBounceCount = 0;
-        while (true) {
-            Intersection its;
-            bool hit = scene->rayIntersect(currentRay, its);
+        Intersection its;
+        if (!scene->rayIntersect(ray, its))
+            return Color3f(0.0f);
 
-            if (!hit) {
-                break;
-            }
+        Normal3f n = its.shFrame.n;
+        Point3f p = its.p;
+        Color3f result;
 
-            if (its.mesh->isEmitter()) {
-                result += throughput * its.mesh->getEmitter()->getRadiance();
-            }
+        const BSDF* bsdf = its.mesh->getBSDF();
 
-            const BSDF* bsdf = its.mesh->getBSDF();
-            if (!bsdf) break;
+        if (n.dot(-ray.d) <= 0 && bsdf->isDiffuse()) {
+            return Color3f(0.0f);
+        }
 
-            BSDFQueryRecord bRec(its.toLocal(-currentRay.d));
-            Point2f sample = sampler->next2D();
-            Color3f f = bsdf->sample(bRec, sample);
-            if (f.isZero())
-                break;
+        Vector2f sample = sampler->next2D();
+        BSDFQueryRecord bsdfQueryRecord(its.toLocal(-ray.d));
 
-            float cosTheta = std::abs(Frame::cosTheta(bRec.wo));
-            float pdf = bsdf->pdf(bRec);
-            if (pdf == 0.f || f.isZero())
-                break;
-            throughput *= f * cosTheta / pdf;
+        Color3f bsdfSample;
+        Vector3f oRay;
 
-            productedEta *= bRec.eta;
+        if (its.mesh->isEmitter())
+            return its.mesh->getEmitter()->getRadiance();
 
-            if (rayBounceCount >= 3) {
-                float pCont = std::min(throughput.maxComponent() * productedEta * productedEta, 0.99f);
-                if (sampler->next1D() > pCont)
-                    break;
-                throughput /= pCont;
-            }
+        bsdfSample = bsdf->sample(bsdfQueryRecord, sample);
+        oRay = its.toWorld(bsdfQueryRecord.wo);
 
-            Vector3f wo_world = its.toWorld(bRec.wo);
-            currentRay = Ray3f(its.p, wo_world);
+        //throughput *= bsdfSample * std::abs(Frame::cosTheta(-ray.d)) / bsdf->pdf(bsdfQueryRecord);
 
-            rayBounceCount++;
+        //continueProb = std::min(throughput.maxComponent() * bsdfQueryRecord.eta * bsdfQueryRecord.eta, 0.99f);
+
+        if (sampler->next1D() < continueProb) {
+            result = (1.0 / continueProb) * bsdfSample * Li(scene, sampler, Ray3f(p + 1e-4f * oRay, oRay));
+        }
+        else {
+            result = Color3f(0.0);
+        }
+
+        return result;
+    }
+    */
+
+    // Loop
+    Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
+        float continueProb = 0.99;
+        Color3f throughput = Color3f(1.f);
+
+        Intersection its;
+        if (!scene->rayIntersect(ray, its))
+            return Color3f(0.0f);
+
+        Normal3f n = its.shFrame.n;
+        Point3f p = its.p;
+        Color3f result;
+
+        const BSDF* bsdf = its.mesh->getBSDF();
+
+        if (n.dot(-ray.d) <= 0 && bsdf->isDiffuse()) {
+            return Color3f(0.0f);
+        }
+
+        Vector2f sample = sampler->next2D();
+        BSDFQueryRecord bsdfQueryRecord(its.toLocal(-ray.d));
+
+        Color3f bsdfSample;
+        Vector3f oRay;
+
+        if (its.mesh->isEmitter())
+            return its.mesh->getEmitter()->getRadiance();
+
+        bsdfSample = bsdf->sample(bsdfQueryRecord, sample);
+        oRay = its.toWorld(bsdfQueryRecord.wo);
+
+        //throughput *= bsdfSample * std::abs(Frame::cosTheta(-ray.d)) / bsdf->pdf(bsdfQueryRecord);
+
+        //continueProb = std::min(throughput.maxComponent() * bsdfQueryRecord.eta * bsdfQueryRecord.eta, 0.99f);
+
+        if (sampler->next1D() < continueProb) {
+            result = (1.0 / continueProb) * bsdfSample * Li(scene, sampler, Ray3f(p + 1e-4f * oRay, oRay));
+        }
+        else {
+            result = Color3f(0.0);
         }
 
         return result;

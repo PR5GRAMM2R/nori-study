@@ -69,13 +69,13 @@ public:
         if (sample[0] < reflectivity) {
             reflection(lightIn, normal, bRec.wo);
 
-            //bRec.eta = 1.f; //////////
+            bRec.eta = 1.f; //////////
         }
-        //else {
-        //    bRec.eta = ioN; //////////
-        //}
+        else {
+            bRec.eta = ioN; //////////
+        }
 
-        bRec.eta = 1.f;
+        //bRec.eta = 1.f;
 
         return Color3f(1.f);
     }
