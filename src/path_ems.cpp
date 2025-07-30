@@ -11,9 +11,9 @@ NORI_NAMESPACE_BEGIN
 
 #define MAX_SAMPLES 10
 
-class PATHMATSIntegrator : public Integrator {
+class PATHEMSIntegrator : public Integrator {
 public:
-    PATHMATSIntegrator(const PropertyList& props) {
+    PATHEMSIntegrator(const PropertyList& props) {
     }
 
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
@@ -45,37 +45,36 @@ public:
             Point3f p = its.p;
             Normal3f n = its.shFrame.n;
 
-            if (its.mesh->getBSDF()->isDiffuse()) {
-                for (int l = 0; l < lightCount; l++) {
-                    Mesh* selectedLightMesh = lightMeshes[l];
-
-                    // 선택된 Light Mesh 에서 point, normal, pd 를 랜덤하게 뽑아오기
-                    Normal3f lightNormal;
-                    Point3f lightPoint;// = selectedLightMesh->sample(sampler, lightNormal, lightPD);
-                    float lightPD = selectedLightMesh->samplePosition(sampler, lightPoint, lightNormal);
-
-                    Normal3f dirFromLight = p - lightPoint;
-                    float dirToLightDist = dirFromLight.norm();
-                    dirFromLight = dirFromLight.normalized();
-
-                    Intersection lightIts;
-                    Ray3f rayFromIntersection(lightPoint, dirFromLight, 1e-4f, dirToLightDist - 1e-4f);
-                    float visible = (scene->getAccel()->rayIntersect(rayFromIntersection, lightIts, true)) ? 0.0 : 1.0;
-
-                    float geometry = visible * (std::fmax(0, n.dot(-dirFromLight)) * std::fmax(0, lightNormal.dot(dirFromLight)) / std::pow(dirToLightDist, 2));
-
-                    BSDFQueryRecord bsdfQueryRecord(its.toLocal(-dirFromLight), its.toLocal(-ray.d), ESolidAngle);
-                    Color3f bsdf = its.mesh->getBSDF()->eval(bsdfQueryRecord);
-
-                    if (lightPD != 0) {
-                        L += bsdf * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
-                        lightSampleCount++;
-                    }
-                }
-            }
-
             if (its.mesh->isEmitter()) {
                 L += throughput * its.mesh->getEmitter()->getRadiance();
+
+                break;
+            }
+
+            if (its.mesh->getBSDF()->isDiffuse()) {
+                Mesh* selectedLightMesh = lightMeshes[(int)(sampler->next1D() * lightCount)];
+
+                // 선택된 Light Mesh 에서 point, normal, pd 를 랜덤하게 뽑아오기
+                Normal3f lightNormal;
+                Point3f lightPoint;
+                float lightPD = selectedLightMesh->samplePosition(sampler, lightPoint, lightNormal);
+
+                Normal3f dirFromLight = p - lightPoint;
+                float dirToLightDist = dirFromLight.norm();
+                dirFromLight = dirFromLight.normalized();
+
+                Intersection lightIts;
+                Ray3f rayFromIntersection(lightPoint, dirFromLight, 1e-4f, dirToLightDist - 1e-4f);
+                float visible = (scene->getAccel()->rayIntersect(rayFromIntersection, lightIts, true)) ? 0.0 : 1.0;
+
+                float geometry = visible * (std::fmax(0, n.dot(-dirFromLight)) * std::fmax(0, lightNormal.dot(dirFromLight)) / std::pow(dirToLightDist, 2));
+
+                BSDFQueryRecord bsdfQueryRecord(its.toLocal(-dirFromLight), its.toLocal(-ray.d), ESolidAngle);
+                Color3f bsdf = its.mesh->getBSDF()->eval(bsdfQueryRecord);
+
+                if (lightPD != 0) {
+                    L += throughput * bsdf * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
+                }
             }
 
             const BSDF* bsdf = its.mesh->getBSDF();
@@ -119,11 +118,11 @@ public:
     }
 
     std::string toString() const {
-        return "PATHMATSIntegrator[]";
+        return "PATHEMSIntegrator[]";
     }
 
 protected:
 };
 
-NORI_REGISTER_CLASS(PATHMATSIntegrator, "path_mats");
+NORI_REGISTER_CLASS(PATHEMSIntegrator, "path_ems");
 NORI_NAMESPACE_END

@@ -11,9 +11,9 @@ NORI_NAMESPACE_BEGIN
 
 #define MAX_SAMPLES 10
 
-class PATHEMSIntegrator : public Integrator {
+class PATHMATSIntegrator : public Integrator {
 public:
-    PATHEMSIntegrator(const PropertyList& props) {
+    PATHMATSIntegrator(const PropertyList& props) {
     }
 
     // Recursive
@@ -125,11 +125,11 @@ public:
     }
 
     std::string toString() const {
-        return "PATHEMSIntegrator[]";
+        return "PATHMATSIntegrator[]";
     }
 
 protected:
 };
 
-NORI_REGISTER_CLASS(PATHEMSIntegrator, "path_ems");
+NORI_REGISTER_CLASS(PATHMATSIntegrator, "path_mats");
 NORI_NAMESPACE_END
