@@ -45,36 +45,15 @@ public:
             Point3f p = its.p;
             Normal3f n = its.shFrame.n;
 
-            if (its.mesh->isEmitter()) {
+            if (its.mesh->isEmitter() && bounce == 0) {
                 L += throughput * its.mesh->getEmitter()->getRadiance();
 
                 break;
             }
+            else if (its.mesh->isEmitter() && bounce > 0) {
+                L += throughput * 0.5 * its.mesh->getEmitter()->getRadiance();
 
-            if (its.mesh->getBSDF()->isDiffuse()) {
-                Mesh* selectedLightMesh = lightMeshes[(int)(sampler->next1D() * lightCount)];
-
-                // 선택된 Light Mesh 에서 point, normal, pd 를 랜덤하게 뽑아오기
-                Normal3f lightNormal;
-                Point3f lightPoint;
-                float lightPD = selectedLightMesh->samplePosition(sampler, lightPoint, lightNormal);
-
-                Normal3f dirFromLight = p - lightPoint;
-                float dirToLightDist = dirFromLight.norm();
-                dirFromLight = dirFromLight.normalized();
-
-                Intersection lightIts;
-                Ray3f rayFromIntersection(lightPoint, dirFromLight, 1e-4f, dirToLightDist - 1e-4f);
-                float visible = (scene->getAccel()->rayIntersect(rayFromIntersection, lightIts, true)) ? 0.0 : 1.0;
-
-                float geometry = visible * (std::fmax(0, n.dot(-dirFromLight)) * std::fmax(0, lightNormal.dot(dirFromLight)) / std::pow(dirToLightDist, 2));
-
-                BSDFQueryRecord bsdfQueryRecord(its.toLocal(-dirFromLight), its.toLocal(-ray.d), ESolidAngle);
-                Color3f bsdf = its.mesh->getBSDF()->eval(bsdfQueryRecord);
-
-                if (lightPD != 0) {
-                    L += throughput * bsdf * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
-                }
+                break;
             }
 
             const BSDF* bsdf = its.mesh->getBSDF();
@@ -82,22 +61,51 @@ public:
             if (!bsdf)
                 break;
 
-            BSDFQueryRecord bRec(its.toLocal(-currentRay.d));
-            Point2f u = sampler->next2D();
+            /////////////////////
 
-            float pdf = 0.0f;
-            Color3f f = bsdf->sample(bRec, u);
-            if (f.isZero())
+            Mesh* selectedLightMesh = lightMeshes[(int)(sampler->next1D() * lightCount)];
+
+            // 선택된 Light Mesh 에서 point, normal, pd 를 랜덤하게 뽑아오기
+            Normal3f lightNormal;
+            Point3f lightPoint;
+            float lightPD = selectedLightMesh->samplePosition(sampler, lightPoint, lightNormal);
+
+            Normal3f dirFromLight = p - lightPoint;
+            float dirToLightDist = dirFromLight.norm();
+            dirFromLight = dirFromLight.normalized();
+
+            Intersection lightIts;
+            Ray3f rayFromIntersection(lightPoint, dirFromLight, 1e-4f, dirToLightDist - 1e-4f);
+            float visible = (scene->getAccel()->rayIntersect(rayFromIntersection, lightIts, true)) ? 0.0 : 1.0;
+
+            float geometry = visible * (std::fmax(0, n.dot(-dirFromLight)) * std::fmax(0, lightNormal.dot(dirFromLight)) / std::pow(dirToLightDist, 2));
+
+            BSDFQueryRecord bRecNEE(its.toLocal(-dirFromLight), its.toLocal(-currentRay.d), ESolidAngle);
+            Point2f u1 = sampler->next2D();
+
+            Color3f fNEE = its.mesh->getBSDF()->eval(bRecNEE); //sample(bRecNEE, u1);
+
+            /////////////////////
+
+            BSDFQueryRecord bRecBRDF(its.toLocal(-currentRay.d));
+            Point2f u2 = sampler->next2D();
+
+            Color3f fBRDF = bsdf->sample(bRecBRDF, u2);
+            if (fBRDF.isZero())
                 break;
 
-            pdf = bsdf->pdf(bRec);
+            Vector3f wo_world = its.toWorld(bRecBRDF.wo);
+            currentRay = Ray3f(its.p, wo_world);
 
-            if (pdf < 0.0f || f.isZero())
-                break;
+            Intersection tempIts;
 
-            throughput *= f;
+            if (lightPD != 0) {
+                L += throughput * 0.5 * fNEE * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
+            }
 
-            eta_prod *= bRec.eta;
+            throughput *= fBRDF;
+
+            eta_prod *= bRecBRDF.eta;
 
             if (bounce >= 3) {
                 float p = std::min(throughput.maxCoeff() * eta_prod * eta_prod, 0.99f);
@@ -107,9 +115,6 @@ public:
 
                 throughput /= p;
             }
-
-            Vector3f wo_world = its.toWorld(bRec.wo);
-            currentRay = Ray3f(its.p, wo_world);
 
             bounce++;
         }
