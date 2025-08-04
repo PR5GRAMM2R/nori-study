@@ -126,6 +126,8 @@ public:
      */
     bool rayIntersect(uint32_t index, const Ray3f &ray, float &u, float &v, float &t) const;
 
+    bool rayIntersect(const Ray3f& ray) const;
+
     /// Return a pointer to the vertex positions
     const MatrixXf &getVertexPositions() const { return m_V; }
 

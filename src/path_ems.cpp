@@ -16,6 +16,7 @@ public:
     PATHEMSIntegrator(const PropertyList& props) {
     }
 
+    /*
     // Recursive
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
         float continueProb = 0.95;
@@ -110,9 +111,9 @@ public:
         else 
             return Color3f(0.f);
     }
+    */
 
     // Loop
-    /*
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
         Color3f L(0.0f);
         Color3f throughput = Color3f(1.f);
@@ -126,7 +127,7 @@ public:
 
             bool hit = scene->rayIntersect(currentRay, its);
 
-            if (!hit || (its.mesh->getBSDF()->isDiffuse() && its.shFrame.n.dot(-currentRay.d) <= 0))
+            if (!hit)
                 break;
 
             Normal3f normal = its.shFrame.n;
@@ -140,9 +141,78 @@ public:
             BSDFQueryRecord bRecBRDF(its.toLocal(-currentRay.d));
             Point2f u = sampler->next2D();
 
-            Color3f f = bsdf->sample(bRecBRDF, u);
-            if (f.isZero())
+            float pdf = bsdf->pdf(bRecBRDF);
+            Color3f f;
+
+            if (bsdf->isDiffuse() && pdf > 0) {
+                f = bsdf->sample(bRecBRDF, u) / pdf;
+                if (f.isZero())
+                    break;
+            }
+            else {
+                f = bsdf->sample(bRecBRDF, u);
+                if (f.isZero())
+                    break;
+            }
+
+            //////////////////////
+
+            if (its.mesh->isEmitter()) {
+                L += throughput * its.mesh->getEmitter()->getRadiance();
+
                 break;
+            }
+
+            currentRay = Ray3f(point, its.toWorld(bRecBRDF.wo));
+
+            if (bsdf->isDiffuse()) {
+                std::vector<Mesh*> meshes = scene->getMeshes();
+                Mesh** lightMeshes = new Mesh * [meshes.size()];
+
+                int lightCount = 0;
+                for (Mesh* mesh : meshes) {
+                    if (mesh->isEmitter()) {
+                        lightMeshes[lightCount++] = mesh;
+                    }
+                }
+
+                Mesh* selectedLightMesh = lightMeshes[int(sampler->next1D() * lightCount)];
+
+                // 선택된 Light Mesh 에서 point, normal, pd 를 랜덤하게 뽑아오기
+                Normal3f lightNormal;
+                Point3f lightPoint;
+                float lightPD = selectedLightMesh->samplePosition(sampler, lightPoint, lightNormal);
+
+                Normal3f dirToLight = lightPoint - point;
+                float dirToLightDist = dirToLight.norm();
+                dirToLight = dirToLight.normalized();
+
+                Intersection lightIts;
+                Ray3f rayFromIntersection(point, dirToLight, 1e-4f, dirToLightDist + 1e-4f);
+                //float visible = (selectedLightMesh->rayIntersect(rayFromIntersection)) ? 1.0 : 0.0;
+                float visible = (scene->getAccel()->rayIntersect(rayFromIntersection, lightIts, false) && lightIts.mesh == selectedLightMesh) ? 1.0 : 0.0;
+
+                float geometry = visible * (std::fmax(0, normal.dot(dirToLight)) * std::fmax(0, lightNormal.dot(-dirToLight)) / std::pow(dirToLightDist, 2));
+
+                BSDFQueryRecord bRecNEE(its.toLocal(-currentRay.d), its.toLocal(dirToLight), ESolidAngle);
+                Color3f fNEE = bsdf->eval(bRecNEE);
+
+                //throughput *= 0.5;
+
+                Intersection tempIts;
+                bool isHitLight = scene->getAccel()->rayIntersect(currentRay, tempIts, false) && tempIts.mesh == selectedLightMesh;
+
+                //printf("%f \n", visible);
+                //printf("%f \n", bsdf->pdf(bRecNEE));
+                printf("%f %f %f \n", fNEE.x(), fNEE.y(), fNEE.z());
+
+                if (lightPD > 0 && !isHitLight) {
+                    Color3f Ltemp = throughput * fNEE * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
+                    L += Ltemp;
+                }
+            }
+            
+            //////////////////////
 
             throughput *= f;
 
@@ -157,56 +227,11 @@ public:
                 throughput /= p;
             }
 
-            //////////////////////
-             
-            std::vector<Mesh*> meshes = scene->getMeshes();
-            Mesh** lightMeshes = new Mesh * [meshes.size()];
-
-            int lightCount = 0;
-            for (Mesh* mesh : meshes) {
-                if (mesh->isEmitter()) {
-                    lightMeshes[lightCount++] = mesh;
-                }
-            }
-
-            Mesh* selectedLightMesh = lightMeshes[int(sampler->next1D() * lightCount)];
-
-            // 선택된 Light Mesh 에서 point, normal, pd 를 랜덤하게 뽑아오기
-            Normal3f lightNormal;
-            Point3f lightPoint;
-            float lightPD = selectedLightMesh->samplePosition(sampler, lightPoint, lightNormal);
-
-            Normal3f dirFromLight = point - lightPoint;
-            float dirToLightDist = dirFromLight.norm();
-            dirFromLight = dirFromLight.normalized();
-
-            Intersection lightIts;
-            Ray3f rayFromIntersection(lightPoint, dirFromLight, 1e-4f, dirToLightDist - 1e-4f);
-            float visible = (scene->getAccel()->rayIntersect(rayFromIntersection, lightIts, true)) ? 0.0 : 1.0;
-
-            float geometry = visible * (std::fmax(0, normal.dot(-dirFromLight)) * std::fmax(0, lightNormal.dot(dirFromLight)) / std::pow(dirToLightDist, 2));
-
-            BSDFQueryRecord bRecNEE(its.toLocal(-dirFromLight), its.toLocal(-ray.d), ESolidAngle);
-            Color3f fNEE = bsdf->eval(bRecNEE);
-
-            if (lightPD != 0) {
-                L += throughput * fNEE * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
-            }
-            
-            //////////////////////
-
-            if (its.mesh->isEmitter())
-                L += throughput * its.mesh->getEmitter()->getRadiance();
-
-            Vector3f wo_world = its.toWorld(bRecBRDF.wo);
-            currentRay = Ray3f(its.p, wo_world);
-
             bounce++;
         }
 
         return L;
     }
-    */
 
     std::string toString() const {
         return "PATHEMSIntegrator[]";

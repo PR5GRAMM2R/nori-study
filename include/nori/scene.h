@@ -58,6 +58,15 @@ public:
     /// Return a reference to an array containing all meshes
     const std::vector<Mesh *> &getMeshes() const { return m_meshes; }
 
+    const std::vector<Emitter*>& emitters() const { return m_emitters; }
+
+    std::pair<const Emitter*, float> sampleEmitter(float u) const {
+        int N = (int)m_emitters.size();
+        if (N == 0) return { nullptr, 0.f };
+        int idx = std::min((int)(u * N), N - 1);
+        return { m_emitters[idx], 1.f / N }; // emitter ¼±ÅÃ È®·ü
+    }
+
     /**
      * \brief Intersect a ray against all triangles stored in the scene
      * and return detailed intersection information
@@ -122,6 +131,7 @@ private:
     Sampler *m_sampler = nullptr;
     Camera *m_camera = nullptr;
     Accel *m_accel = nullptr;
+    std::vector<Emitter*> m_emitters;
 };
 
 NORI_NAMESPACE_END
