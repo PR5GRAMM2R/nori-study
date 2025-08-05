@@ -16,6 +16,125 @@ public:
     PATHEMSIntegrator(const PropertyList& props) {
     }
 
+    Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
+        return Li(scene, sampler, ray, 0, Color3f(1.0f), 1.0f, false);
+    }
+
+    Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray, int depth = 0, 
+                            Color3f& throughput = Color3f(1.0f), float eta_prod = 1.0f, bool lastSpec = false) const {
+        Intersection its;
+        if (!scene->rayIntersect(ray, its))
+            return Color3f(0.f);
+
+        const BSDF* bsdf = its.mesh->getBSDF();
+        Point3f  point = its.p;
+        Normal3f normal = its.shFrame.n;
+
+        Color3f L(0.f);
+
+        if (its.mesh->isEmitter()) {
+            Color3f Le = its.mesh->getEmitter()->getRadiance();
+            if (depth == 0 || lastSpec)
+                L += Le;
+
+            return L;
+        }
+
+        ////////// BSDF //////////
+
+        Color3f resultBSDF(0.0f);
+        Color3f sampleBSDF(0.0f);
+        float pdfBSDF = 0;
+
+        BSDFQueryRecord bRecBSDF(its.toLocal(-ray.d));
+        sampleBSDF = bsdf->sample(bRecBSDF, sampler->next2D());
+
+        pdfBSDF = bsdf->pdf(bRecBSDF);
+
+        if (pdfBSDF == 0) {
+            lastSpec = true;
+        }
+
+        //////////////////////////
+
+        ////////// NEE //////////
+
+        Color3f resultNEE(0.0f);
+        float pdfNEE = 0;
+        Mesh* selectedLightMesh;
+
+        if (!lastSpec) {
+            std::vector<Mesh*> meshes = scene->getMeshes();
+            Mesh** lightMeshes = new Mesh * [meshes.size()];
+
+            int lightCount = 0;
+            for (Mesh* mesh : meshes) {
+                if (mesh->isEmitter()) {
+                    lightMeshes[lightCount++] = mesh;
+                }
+            }
+
+            selectedLightMesh = lightMeshes[int(sampler->next1D() * lightCount)];
+
+            Normal3f lightNormal;
+            Point3f lightPoint;
+            float lightPD = (1.0 / (float)lightCount) * selectedLightMesh->samplePosition(sampler, lightPoint, lightNormal);
+
+            Vector3f dirToLight = lightPoint - point;
+            float dirToLightDist = dirToLight.norm();
+            dirToLight = dirToLight.normalized();
+
+            Intersection lightIts;
+            Ray3f rayFromIntersection(point, dirToLight, 1e-4f, dirToLightDist - 1e-4f);
+            float visible = (scene->getAccel()->rayIntersect(rayFromIntersection, lightIts, true)) ? 0.0 : 1.0;
+
+            float geometry = visible * (std::fmax(0, normal.dot(dirToLight)) * std::fmax(0, lightNormal.dot(-dirToLight)) / std::pow(dirToLightDist, 2));
+
+            BSDFQueryRecord bRecNEE(its.toLocal(-ray.d), its.toLocal(dirToLight), ESolidAngle);
+            Color3f evalNEE = bsdf->eval(bRecNEE);
+            pdfNEE = bsdf->pdf(bRecNEE);
+
+            if (lightPD != 0) {
+                resultNEE = evalNEE * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
+            }
+        }
+
+        /////////////////////////
+
+        Ray3f nextRay(point, its.toWorld(bRecBSDF.wo));
+
+        Intersection tempIts;
+        if (!lastSpec && scene->rayIntersect(nextRay, tempIts) && tempIts.mesh == selectedLightMesh) {
+            lastSpec = true;
+        }
+
+        throughput *= sampleBSDF;
+        eta_prod *= bRecBSDF.eta;
+
+        if (depth >= 3) {
+            float p = std::min(throughput.maxCoeff() * eta_prod * eta_prod, 0.99f);
+
+            if (sampler->next1D() > p)
+                return Color3f(0.0f);
+
+            throughput /= p;
+        }
+
+        resultBSDF = Li(scene, sampler, nextRay, depth++, throughput, eta_prod, lastSpec);
+
+        if (lastSpec) {
+            L += throughput * resultBSDF;
+
+            return L;
+        }
+        else {
+            L += throughput * (resultNEE + resultBSDF);
+
+            return L;
+        }
+        
+    }
+
     /*
     // Recursive
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
@@ -114,6 +233,7 @@ public:
     */
 
     // Loop
+    /*
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
         Color3f L(0.0f);
         Color3f throughput = Color3f(1.f);
@@ -232,6 +352,7 @@ public:
 
         return L;
     }
+    */
 
     std::string toString() const {
         return "PATHEMSIntegrator[]";
