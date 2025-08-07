@@ -22,7 +22,7 @@ public:
         return Li(scene, sampler, ray, 0, Color3f(1.0f), 1.0f, false);
     }
 
-    Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray, int depth, Color3f& throughput, float& eta_prod, bool lastWasSpecular) const {
+    Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray, int depth, Color3f& throughput, float eta_prod, bool lastWasSpecular) const {
         Color3f L(0.0f);
 
         Intersection its;
@@ -42,15 +42,13 @@ public:
 
         if (its.mesh->isEmitter()) {
             if (depth == 0 || lastWasSpecular) {
-                return its.mesh->getEmitter()->getRadiance();
+                L += throughput * its.mesh->getEmitter()->getRadiance();
             }
         }
 
-        lastWasSpecular = false;
-
         ////////// BSDF //////////
 
-        Color3f resultBSDF(0.0f);
+        //Color3f resultBSDF(0.0f);
         Color3f sampleBSDF(0.0f);
         float pdfBSDF = 0;
 
@@ -106,10 +104,8 @@ public:
             pdfNEE = bsdf->pdf(bRecNEE);
 
             if (lightPD != 0) {
-                resultNEE = evalNEE * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
+                resultNEE = throughput * evalNEE * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
             }
-
-            L += throughput * resultNEE;
         }
 
         /////////////////////////
@@ -129,11 +125,14 @@ public:
             throughput /= p;
         }
 
-        if (lastWasSpecular) {
-            return Li(scene, sampler, newRay)
-        }
+        Ray3f newRay(point, its.toWorld(bRecBSDF.wo));
 
-        depth++;
+        if (lastWasSpecular) {
+            L += Li(scene, sampler, newRay, depth + 1, throughput, eta_prod, lastWasSpecular);
+        }
+        else {
+            L += resultNEE + Li(scene, sampler, newRay, depth + 1, throughput, eta_prod, lastWasSpecular);
+        }
 
         return L;
     }
