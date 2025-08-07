@@ -1,4 +1,3 @@
-
 #include <nori/integrator.h>
 #include <nori/scene.h>
 #include <nori/warp.h>
