@@ -146,6 +146,9 @@ public:
         Ray3f currentRay = ray;
         int depth = 0;
 
+        float wBSDF = 1;
+        float wNEE = 1;
+
         bool lastWasSpecular = false;
 
         while (true) {
@@ -164,10 +167,8 @@ public:
             if (!bsdf)
                 break;
 
-            if (its.mesh->isEmitter()) {
-                if (depth == 0 || lastWasSpecular) {
-                    L += throughput * its.mesh->getEmitter()->getRadiance();
-                }
+            if (its.mesh->isEmitter() && normal.dot(-currentRay.d) > 0) {
+                L += wBSDF * throughput * its.mesh->getEmitter()->getRadiance();
             }
 
             lastWasSpecular = false;
@@ -229,11 +230,13 @@ public:
                 Color3f evalNEE = bsdf->eval(bRecNEE);
                 pdfNEE = bsdf->pdf(bRecNEE);
 
+                wNEE = (pdfBSDF + pdfNEE > 0.0f) ? pdfNEE / (pdfBSDF + pdfNEE) : pdfNEE;
+
                 if (lightPD != 0) {
                     resultNEE = evalNEE * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
                 }
 
-                L += throughput * resultNEE;
+                L += wNEE * throughput * resultNEE;
             }
 
             /////////////////////////
@@ -252,6 +255,8 @@ public:
 
                 throughput /= p;
             }
+
+            wBSDF = (pdfBSDF + pdfNEE > 0.0f) ? pdfBSDF / (pdfBSDF + pdfNEE) : pdfBSDF;
 
             currentRay = Ray3f(point, its.toWorld(bRecBSDF.wo));
 

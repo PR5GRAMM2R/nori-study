@@ -16,7 +16,6 @@ public:
     }
 
     // Recursive
-    /*
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
         return Li(scene, sampler, ray, 0, Color3f(1.0f), 1.0f, false);
     }
@@ -29,21 +28,21 @@ public:
         bool hit = scene->rayIntersect(ray, its);
 
         if (!hit)
-            return Color3f(0.0f);
+            return L;
 
         Normal3f normal = its.shFrame.n;
         Point3f point = its.p;
-
-        const BSDF* bsdf = its.mesh->getBSDF();
-
-        if (!bsdf)
-            return Color3f(0.0f);
 
         if (its.mesh->isEmitter()) {
             if (depth == 0 || lastWasSpecular) {
                 L += throughput * its.mesh->getEmitter()->getRadiance();
             }
         }
+
+        const BSDF* bsdf = its.mesh->getBSDF();
+
+        if (!bsdf)
+            return L;
 
         ////////// BSDF //////////
 
@@ -110,34 +109,32 @@ public:
         /////////////////////////
 
         if (pdfBSDF < 0.0f || sampleBSDF.isZero())
-            return Color3f(0.0f);
+            return L; //return Color3f(0.0f);
 
         throughput *= sampleBSDF;
         eta_prod *= bRecBSDF.eta;
 
+        float p = 1;
+
         if (depth >= 3) {
-            float p = std::min(throughput.maxCoeff() * eta_prod * eta_prod, 0.99f);
+            p = std::min(throughput.maxCoeff() * eta_prod * eta_prod, 0.99f);
 
             if (sampler->next1D() > p)
-                return Color3f(0.0f);
+                return L; //Color3f(0.0f);
 
             throughput /= p;
         }
 
-        Ray3f newRay(point, its.toWorld(bRecBSDF.wo));
+        Vector3f wo = its.toWorld(bRecBSDF.wo);
+        Ray3f newRay(point + 1e-4f * wo, wo);
 
-        if (lastWasSpecular) {
-            L += Li(scene, sampler, newRay, depth + 1, throughput, eta_prod, lastWasSpecular);
-        }
-        else {
-            L += resultNEE + Li(scene, sampler, newRay, depth + 1, throughput, eta_prod, lastWasSpecular);
-        }
+        L += resultNEE + Li(scene, sampler, newRay, depth + 1, throughput, eta_prod, lastWasSpecular);
 
         return L;
     }
-    */
     
     // Loop
+    /*
     Color3f Li(const Scene* scene, Sampler* sampler, const Ray3f& ray) const {
         Color3f L(0.0f);
         Color3f throughput = Color3f(1.f);
@@ -260,6 +257,7 @@ public:
 
         return L;
     }
+    */
 
     std::string toString() const {
         return "PATHEMSIntegrator[]";
