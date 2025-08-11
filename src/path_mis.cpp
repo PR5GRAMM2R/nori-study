@@ -197,6 +197,7 @@ public:
 
             Color3f resultNEE(0.0f);
             float pdfNEE = 0;
+            float pdfNEEbsdf = 1;
 
             if (!lastWasSpecular) {
                 std::vector<Mesh*> meshes = scene->getMeshes();
@@ -229,10 +230,13 @@ public:
                 BSDFQueryRecord bRecNEE(its.toLocal(-currentRay.d), its.toLocal(dirToLight), ESolidAngle);
                 Color3f evalNEE = bsdf->eval(bRecNEE);
                 //pdfNEE = bsdf->pdf(bRecNEE);
-                float cosThetaLight = lightIts.shFrame.cosTheta(lightIts.toLocal(-dirToLight));
+                float cosThetaLight = lightIts.shFrame.n.dot(-dirToLight);
                 pdfNEE = (cosThetaLight > 0) ? lightPD * std::pow(dirToLightDist, 2) / cosThetaLight : 0;
 
-                wNEE = (pdfBSDF + pdfNEE > 0.0f) ? pdfNEE / (pdfBSDF + pdfNEE) : pdfNEE;
+                BSDFQueryRecord bRecNEEbsdf(its.toLocal(-currentRay.d), its.toLocal(dirToLight), ESolidAngle);
+                pdfNEEbsdf = bsdf->pdf(bRecNEEbsdf);
+
+                wNEE = (pdfNEEbsdf + pdfNEE > 0.0f) ? pdfNEE / (pdfNEEbsdf + pdfNEE) : pdfNEE;
 
                 if (lightPD != 0) {
                     resultNEE = evalNEE * geometry * selectedLightMesh->getEmitter()->getRadiance() / lightPD;
@@ -259,7 +263,7 @@ public:
             }
 
             if (!lastWasSpecular)
-                wBSDF = (pdfBSDF + pdfNEE > 0.0f) ? pdfBSDF / (pdfBSDF + pdfNEE) : pdfBSDF;
+                wBSDF = (pdfNEEbsdf + pdfNEE > 0.0f) ? pdfNEEbsdf / (pdfNEEbsdf + pdfNEE) : 1.f;
             else
                 wBSDF = 1;
 
