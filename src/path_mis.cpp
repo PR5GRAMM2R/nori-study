@@ -147,7 +147,7 @@ public:
         int depth = 0;
 
         float wBSDF = 1;
-        float wNEE = 1;
+        float wNEE = 0;
 
         bool lastWasSpecular = false;
 
@@ -228,7 +228,9 @@ public:
 
                 BSDFQueryRecord bRecNEE(its.toLocal(-currentRay.d), its.toLocal(dirToLight), ESolidAngle);
                 Color3f evalNEE = bsdf->eval(bRecNEE);
-                pdfNEE = bsdf->pdf(bRecNEE);
+                //pdfNEE = bsdf->pdf(bRecNEE);
+                float cosThetaLight = lightIts.shFrame.cosTheta(lightIts.toLocal(-dirToLight));
+                pdfNEE = (cosThetaLight > 0) ? lightPD * std::pow(dirToLightDist, 2) / cosThetaLight : 0;
 
                 wNEE = (pdfBSDF + pdfNEE > 0.0f) ? pdfNEE / (pdfBSDF + pdfNEE) : pdfNEE;
 
@@ -256,7 +258,10 @@ public:
                 throughput /= p;
             }
 
-            wBSDF = (pdfBSDF + pdfNEE > 0.0f) ? pdfBSDF / (pdfBSDF + pdfNEE) : pdfBSDF;
+            if (!lastWasSpecular)
+                wBSDF = (pdfBSDF + pdfNEE > 0.0f) ? pdfBSDF / (pdfBSDF + pdfNEE) : pdfBSDF;
+            else
+                wBSDF = 1;
 
             currentRay = Ray3f(point, its.toWorld(bRecBSDF.wo));
 
